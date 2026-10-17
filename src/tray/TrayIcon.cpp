@@ -49,6 +49,8 @@ TrayIcon::TrayIcon(QObject *parent)
 
     auto *card = new QWidget(m_menu);
     card->setObjectName(QStringLiteral("trayMenuCard"));
+    // 无此属性时，部分样式插件下 stylesheet 的 background/圆角不生效
+    card->setAttribute(Qt::WA_StyledBackground, true);
     card->setStyleSheet(QStringLiteral(
         "QWidget#trayMenuCard {"
         "  background: #ffffff;"
