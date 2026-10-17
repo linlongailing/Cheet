@@ -10,6 +10,8 @@ out/
 # Installer packaging (local only — do not publish)
 package.bat
 installer/
+RELEASE_NOTES*.md
+cheetahClip-Setup-*.exe
 
 # IDE / local
 .vscode/
