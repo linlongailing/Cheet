@@ -7,6 +7,10 @@ cmake-build-*/
 out/
 .qt/
 
+# Installer packaging (local only — do not publish)
+package.bat
+installer/
+
 # IDE / local
 .vscode/
 .idea/
