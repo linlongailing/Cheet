@@ -6,6 +6,10 @@ Windows 托盘截图工具，基于 **C++ + Qt Quick (QML)**。支持框选标�
 
 设置保存在：`%LOCALAPPDATA%\cheetahClip\settings.json`
 
+## 许可证
+
+[MIT](LICENSE) — 免费开源，允许他人商用、修改与再分发。
+
 ## 功能
 
 - 系统托盘（截图 / 设置 / 退出）

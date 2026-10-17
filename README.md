@@ -6,6 +6,10 @@ A Windows tray screenshot tool built with **C++ and Qt Quick (QML)**. Capture a 
 
 Settings are stored at: `%LOCALAPPDATA%\cheetahClip\settings.json`
 
+## License
+
+[MIT](LICENSE) — free and open source; commercial use, modification, and distribution are allowed.
+
 ## Features
 
 - System tray (capture / settings / quit)
