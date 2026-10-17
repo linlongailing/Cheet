@@ -6,12 +6,12 @@
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("cheetahClip"));
-    QApplication::setOrganizationName(QStringLiteral("cheetahClip"));
+    QApplication::setApplicationName(QStringLiteral("Cheet"));
+    QApplication::setOrganizationName(QStringLiteral("Cheet"));
     QApplication::setQuitOnLastWindowClosed(false);
 
-    Application cheetah;
-    if (!cheetah.initialize())
+    Application appCore;
+    if (!appCore.initialize())
         return 1;
 
     return app.exec();

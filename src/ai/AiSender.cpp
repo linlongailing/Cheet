@@ -40,7 +40,7 @@ QString AiSender::saveTempImage(const QPixmap &image) const
     QDir().mkpath(dir);
     // 唯一文件名，避免并发覆盖；不嵌入用户路径信息
     const QString path =
-        dir + QStringLiteral("/cheetahClip_%1.png")
+        dir + QStringLiteral("/Cheet_%1.png")
                   .arg(QDateTime::currentMSecsSinceEpoch());
     if (!image.save(path, "PNG")) {
         qWarning("AiSender: temp image save failed");

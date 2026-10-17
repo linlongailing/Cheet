@@ -52,6 +52,7 @@ qt_add_executable(cheetahClip WIN32
     ${APP_SOURCES}
     resources/app.rc
 )
+set_target_properties(cheetahClip PROPERTIES OUTPUT_NAME Cheet)
 
 qt_add_qml_module(cheetahClip
     URI CheetahClip

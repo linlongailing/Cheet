@@ -5,7 +5,7 @@
 
 namespace {
 constexpr auto kRunKey = "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-constexpr auto kAppName = "cheetahClip";
+constexpr auto kAppName = "Cheet";
 }
 
 bool Autostart::isEnabled()

@@ -12,6 +12,7 @@ package.bat
 installer/
 RELEASE_NOTES*.md
 cheetahClip-Setup-*.exe
+Cheet-Setup-*.exe
 
 # IDE / local
 .vscode/

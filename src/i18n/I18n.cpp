@@ -16,7 +16,7 @@ I18n::I18n(QObject *parent)
     : QObject(parent)
 {
     auto &zh = m_strings[QStringLiteral("zh")];
-    zh[QStringLiteral("settings_title")] = QStringLiteral("cheetahClip 设置");
+    zh[QStringLiteral("settings_title")] = QStringLiteral("Cheet 设置");
     zh[QStringLiteral("settings_heading")] = QStringLiteral("设置");
     zh[QStringLiteral("settings_subtitle")] = QStringLiteral("管理截图方式、AI 问询与应用偏好。");
     zh[QStringLiteral("settings_local")] = QStringLiteral("本地配置");
@@ -87,7 +87,7 @@ I18n::I18n(QObject *parent)
     zh[QStringLiteral("tool_ok_desc")] = QStringLiteral("确认截图，只复制到剪贴板，不自动发送");
 
     auto &en = m_strings[QStringLiteral("en")];
-    en[QStringLiteral("settings_title")] = QStringLiteral("cheetahClip Settings");
+    en[QStringLiteral("settings_title")] = QStringLiteral("Cheet Settings");
     en[QStringLiteral("settings_heading")] = QStringLiteral("Settings");
     en[QStringLiteral("settings_subtitle")] = QStringLiteral("Manage capture, AI inquire, and app preferences.");
     en[QStringLiteral("settings_local")] = QStringLiteral("Local config");

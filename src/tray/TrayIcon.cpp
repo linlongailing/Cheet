@@ -36,7 +36,7 @@ TrayIcon::TrayIcon(QObject *parent)
 {
     m_tray = new QSystemTrayIcon(this);
     m_tray->setIcon(QIcon(QStringLiteral(":/qt/qml/CheetahClip/resources/icons/icon.png")));
-    m_tray->setToolTip(QStringLiteral("cheetahClip"));
+    m_tray->setToolTip(QStringLiteral("Cheet"));
 
     // 自定义弹出菜单（不用原生 QMenu，以便圆角白底样式）
     m_menu = new QWidget(nullptr, Qt::FramelessWindowHint | Qt::Popup | Qt::NoDropShadowWindowHint);
@@ -139,7 +139,7 @@ void TrayIcon::retranslate(const QString &hotkeyLabel)
 void TrayIcon::notify(const QString &message)
 {
     if (m_tray)
-        m_tray->showMessage(QStringLiteral("cheetahClip"), message, QSystemTrayIcon::Information, 3500);
+        m_tray->showMessage(QStringLiteral("Cheet"), message, QSystemTrayIcon::Information, 3500);
 }
 
 void TrayIcon::hideMenu()

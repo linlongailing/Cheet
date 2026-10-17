@@ -32,7 +32,7 @@ QString saveTempPng(const QImage &img)
     if (dir.isEmpty() || img.isNull())
         return {};
     QDir().mkpath(dir);
-    const QString path = dir + QStringLiteral("/cheetahClip_clipboard.png");
+    const QString path = dir + QStringLiteral("/Cheet_clipboard.png");
     if (!img.save(path, "PNG"))
         return {};
     return QDir::toNativeSeparators(path);

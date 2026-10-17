@@ -1,10 +1,10 @@
-# cheetahClip
+# Cheet
 
 [English](README.md)
 
 Windows 托盘截图工具，基于 **C++ + Qt Quick (QML)**。支持框选标注、复制到剪贴板，以及一键问询 ChatGPT / Gemini / Claude（桌面客户端或浏览器）。
 
-设置保存在：`%LOCALAPPDATA%\cheetahClip\settings.json`
+设置保存在：`%LOCALAPPDATA%\Cheet\settings.json`
 
 ## 许可证
 
@@ -46,7 +46,7 @@ cmake --build build
 运行：
 
 ```powershell
-.\build\cheetahClip.exe
+.\build\Cheet.exe
 ```
 
 ## 工程约定

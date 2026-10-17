@@ -3,7 +3,7 @@
 #include <QJsonObject>
 #include <QString>
 
-/** 应用设置（%LOCALAPPDATA%/cheetahClip/settings.json）。 */
+/** 应用设置（%LOCALAPPDATA%/Cheet/settings.json）。 */
 class Settings
 {
 public:

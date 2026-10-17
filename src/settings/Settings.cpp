@@ -20,12 +20,12 @@ QString Settings::appDataDir()
     // 优先 %LOCALAPPDATA%（尊重系统重定向），不硬编码用户主目录
     QString dir;
     if (const QByteArray local = qgetenv("LOCALAPPDATA"); !local.isEmpty()) {
-        dir = QString::fromLocal8Bit(local) + QStringLiteral("/cheetahClip");
+        dir = QString::fromLocal8Bit(local) + QStringLiteral("/Cheet");
     } else {
         dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
         if (dir.isEmpty())
             dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
-                  + QStringLiteral("/cheetahClip");
+                  + QStringLiteral("/Cheet");
     }
     QDir().mkpath(dir);
     return dir;

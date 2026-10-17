@@ -1,10 +1,10 @@
-# cheetahClip
+# Cheet
 
 [中文](README.zh-CN.md)
 
 A Windows tray screenshot tool built with **C++ and Qt Quick (QML)**. Capture a region, annotate it, copy to the clipboard, or send an AI inquire to ChatGPT / Gemini / Claude (desktop app or browser).
 
-Settings are stored at: `%LOCALAPPDATA%\cheetahClip\settings.json`
+Settings are stored at: `%LOCALAPPDATA%\Cheet\settings.json`
 
 ## License
 
@@ -46,7 +46,7 @@ cmake --build build
 Run:
 
 ```powershell
-.\build\cheetahClip.exe
+.\build\Cheet.exe
 ```
 
 ## Project conventions
