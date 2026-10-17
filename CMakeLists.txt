@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Concurrent)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Network Concurrent)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -83,6 +83,7 @@ target_link_libraries(cheetahClip PRIVATE
     Qt6::Widgets
     Qt6::Quick
     Qt6::QuickControls2
+    Qt6::Network
     Qt6::Concurrent
 )
 
