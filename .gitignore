@@ -1,6 +1,8 @@
 # Build outputs
 build/
 build_release/
+dist/
+installer_output/
 cmake-build-*/
 out/
 .qt/
