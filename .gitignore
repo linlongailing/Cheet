@@ -1,0 +1,27 @@
+# Build outputs
+build/
+build_release/
+cmake-build-*/
+out/
+.qt/
+
+# IDE / local
+.vscode/
+.idea/
+*.user
+*.autosave
+*.suo
+*.sdf
+CMakeUserPresets.json
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Secrets / local env (never commit)
+.env
+.env.*
+*.pem
+*.key
+credentials.json
