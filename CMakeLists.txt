@@ -38,6 +38,7 @@ set(APP_SOURCES
     src/autostart/Autostart.cpp
     src/capture/CaptureController.cpp
     src/capture/CaptureOverlay.cpp
+    src/capture/ClipboardImage.cpp
     src/platform/UiaCore.cpp
     src/ai/WinInput.cpp
     src/ai/UiaComposer.cpp

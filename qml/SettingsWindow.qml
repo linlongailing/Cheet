@@ -9,7 +9,7 @@ ApplicationWindow {
     height: 720
     minimumWidth: 900
     minimumHeight: 680
-    visible: true
+    visible: false
     // 依赖 language，切换中英文时整页文案重算
     readonly property string lang: appI18n.language
     title: {
@@ -18,6 +18,13 @@ ApplicationWindow {
     }
     color: "#111214"
     flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint
+
+    // 点关闭时隐藏而非销毁，避免下次重新加载 QML 造成闪烁与等待
+    onClosing: (close) => {
+        close.accepted = false
+        visible = false
+        settingsController.cancel()
+    }
 
     function t(key) {
         void root.lang
@@ -373,13 +380,7 @@ ApplicationWindow {
         // Footer
         RowLayout {
             Layout.fillWidth: true
-            Text {
-                text: t("settings_footer_hint")
-                color: "#5c5c5c"
-                font.family: "Microsoft YaHei UI"
-                font.pixelSize: 12
-                Layout.fillWidth: true
-            }
+            Item { Layout.fillWidth: true }
             RoundButton {
                 text: t("cancel")
                 onClicked: settingsController.cancel()

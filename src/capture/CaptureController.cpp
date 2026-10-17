@@ -1,9 +1,8 @@
 #include "capture/CaptureController.h"
 
+#include "capture/ClipboardImage.h"
 #include "capture/CaptureOverlay.h"
 
-#include <QApplication>
-#include <QClipboard>
 #include <QGuiApplication>
 #include <QPainter>
 #include <QScreen>
@@ -24,17 +23,32 @@ void CaptureController::startCapture()
         return;
 
     QRect geo;
-    for (QScreen *screen : QGuiApplication::screens())
+    qreal dpr = 1.0;
+    for (QScreen *screen : QGuiApplication::screens()) {
         geo = geo.united(screen->geometry());
+        dpr = qMax(dpr, screen->devicePixelRatio());
+    }
 
-    // 拼接各屏截图
-    QPixmap shot(geo.size());
+    // 按物理像素拼接，并设置 devicePixelRatio，避免 125%/150%/200% 缩成糊图
+    const QSize pixelSize(qRound(geo.width() * dpr), qRound(geo.height() * dpr));
+    QPixmap shot(pixelSize);
+    shot.setDevicePixelRatio(dpr);
     shot.fill(Qt::black);
     {
         QPainter p(&shot);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, false);
         for (QScreen *screen : QGuiApplication::screens()) {
-            const QPixmap part = screen->grabWindow(0);
-            p.drawPixmap(screen->geometry().topLeft() - geo.topLeft(), part);
+            QPixmap part = screen->grabWindow(0);
+            if (part.isNull())
+                continue;
+            // grabWindow 一般为物理像素；补齐 DPR 以便按逻辑坐标绘制不丢清晰度
+            if (part.devicePixelRatio() < 1.0)
+                part.setDevicePixelRatio(1.0);
+            const qreal partDpr = screen->devicePixelRatio();
+            if (!qFuzzyCompare(part.devicePixelRatio(), partDpr))
+                part.setDevicePixelRatio(partDpr);
+            const QPoint topLeft = screen->geometry().topLeft() - geo.topLeft();
+            p.drawPixmap(topLeft, part);
         }
     }
 
@@ -65,7 +79,8 @@ void CaptureController::onOverlayFinished(const QPixmap &image, bool sendAi)
         emit captureFinished(false);
         return;
     }
-    QApplication::clipboard()->setPixmap(image);
+    // 图片 + 临时文件，支持粘贴到桌面/文件夹及其他应用
+    ClipboardImage::copyForPaste(image);
     if (sendAi) {
         emit aiInquireRequested(image);
         // busy 由 Application::onAiInquire / AiSender::finished 管理

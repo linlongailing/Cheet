@@ -25,7 +25,6 @@ I18n::I18n(QObject *parent)
     zh[QStringLiteral("section_ai")] = QStringLiteral("02  AI 问询");
     zh[QStringLiteral("section_ai_desc")] = QStringLiteral("选择模型与问询方式");
     zh[QStringLiteral("section_general")] = QStringLiteral("03  常规");
-    zh[QStringLiteral("settings_footer_hint")] = QStringLiteral("调整完成后，点击保存应用设置。");
     zh[QStringLiteral("language")] = QStringLiteral("界面语言");
     zh[QStringLiteral("hotkey")] = QStringLiteral("截图快捷键");
     zh[QStringLiteral("reset_default")] = QStringLiteral("恢复默认");
@@ -51,7 +50,7 @@ I18n::I18n(QObject *parent)
     zh[QStringLiteral("save")] = QStringLiteral("保存");
     zh[QStringLiteral("cancel")] = QStringLiteral("取消");
     zh[QStringLiteral("tray_capture")] = QStringLiteral("立即截图 ({hotkey})");
-    zh[QStringLiteral("tray_settings")] = QStringLiteral("设置…");
+    zh[QStringLiteral("tray_settings")] = QStringLiteral("设置");
     zh[QStringLiteral("tray_quit")] = QStringLiteral("退出");
     zh[QStringLiteral("notify_copied")] = QStringLiteral("截图已复制到剪贴板");
     zh[QStringLiteral("notify_opening")] = QStringLiteral("正在打开 {label}…");
@@ -97,7 +96,6 @@ I18n::I18n(QObject *parent)
     en[QStringLiteral("section_ai")] = QStringLiteral("02  AI inquire");
     en[QStringLiteral("section_ai_desc")] = QStringLiteral("Choose model and inquire method");
     en[QStringLiteral("section_general")] = QStringLiteral("03  General");
-    en[QStringLiteral("settings_footer_hint")] = QStringLiteral("Click Save to apply your changes.");
     en[QStringLiteral("language")] = QStringLiteral("Language");
     en[QStringLiteral("hotkey")] = QStringLiteral("Capture hotkey");
     en[QStringLiteral("reset_default")] = QStringLiteral("Reset");
@@ -124,7 +122,7 @@ I18n::I18n(QObject *parent)
     en[QStringLiteral("save")] = QStringLiteral("Save");
     en[QStringLiteral("cancel")] = QStringLiteral("Cancel");
     en[QStringLiteral("tray_capture")] = QStringLiteral("Capture now ({hotkey})");
-    en[QStringLiteral("tray_settings")] = QStringLiteral("Settings…");
+    en[QStringLiteral("tray_settings")] = QStringLiteral("Settings");
     en[QStringLiteral("tray_quit")] = QStringLiteral("Quit");
     en[QStringLiteral("notify_copied")] = QStringLiteral("Screenshot copied to clipboard");
     en[QStringLiteral("notify_opening")] = QStringLiteral("Opening {label}…");

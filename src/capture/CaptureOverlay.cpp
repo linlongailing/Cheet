@@ -587,8 +587,12 @@ QPixmap CaptureOverlay::renderResult() const
     const QRect sel = selectionRect();
     if (sel.width() < 2 || sel.height() < 2)
         return {};
+    // copy() 在带 DPR 时使用逻辑坐标裁剪，结果保留物理像素与 devicePixelRatio
     QPixmap out = m_screenshot.copy(sel);
+    if (out.isNull())
+        return {};
     QPainter p(&out);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, false);
     for (const Annotation &a : m_annotations)
         drawAnnotation(p, a, sel.topLeft());
     return out;
@@ -608,6 +612,8 @@ void CaptureOverlay::confirm(bool sendAi)
 void CaptureOverlay::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, false);
+    // m_screenshot 已设置 devicePixelRatio，按逻辑坐标铺满，输出仍为物理像素
     p.drawPixmap(0, 0, m_screenshot);
     p.fillRect(rect(), QColor(0, 0, 0, 120));
 

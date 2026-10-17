@@ -80,7 +80,7 @@ bool Application::initialize()
     });
     connect(m_settings, &SettingsController::closed, this, [this]() {
         if (m_settingsWindow)
-            m_settingsWindow->close();
+            m_settingsWindow->hide();
     });
     connect(&I18n::instance(), &I18n::languageChanged, this, [this]() {
         m_tray->retranslate(m_settings->hotkeyLabel());
@@ -89,6 +89,9 @@ bool Application::initialize()
     registerHotkeyFromSettings();
     m_capture->setSettings(m_settings->current());
     m_tray->retranslate(m_settings->hotkeyLabel());
+
+    // 空闲时预加载设置页，避免首次打开卡顿/闪白
+    QTimer::singleShot(0, this, [this]() { ensureSettingsWindow(); });
     return true;
 }
 
@@ -106,39 +109,86 @@ void Application::applySettingsFromController()
     m_tray->retranslate(m_settings->hotkeyLabel());
 }
 
+void Application::finishSettingsWindowSetup(QQuickWindow *win)
+{
+    if (!win)
+        return;
+    if (m_settingsWindow == win)
+        return;
+    m_settingsWindow = win;
+    QObject::connect(win, &QObject::destroyed, this, [this]() { m_settingsWindow = nullptr; });
+    // 先铺深色底，再套 DWM，避免先闪系统默认浅色标题栏
+    win->setColor(QColor(0x11, 0x12, 0x14));
+#ifdef Q_OS_WIN
+    // 创建原生窗口句柄后再设暗色标题栏（仍保持隐藏）
+    win->create();
+    applyDarkTitleBar(win);
+#endif
+}
+
+void Application::ensureSettingsWindow()
+{
+    if (m_settingsWindow || m_settingsLoading)
+        return;
+    m_settingsLoading = true;
+
+    const QUrl url(QStringLiteral("qrc:/qt/qml/CheetahClip/qml/SettingsWindow.qml"));
+    // 不用 SingleShot：objectCreated 可能先报其它对象，匹配到设置窗再断开
+    QMetaObject::Connection *conn = new QMetaObject::Connection;
+    *conn = QObject::connect(
+        &m_engine, &QQmlApplicationEngine::objectCreated, this,
+        [this, conn](QObject *obj, const QUrl &objUrl) {
+            if (!objUrl.path().endsWith(QLatin1String("SettingsWindow.qml")))
+                return;
+            QObject::disconnect(*conn);
+            delete conn;
+            m_settingsLoading = false;
+            if (!obj)
+                return;
+            if (auto *win = qobject_cast<QQuickWindow *>(obj))
+                finishSettingsWindowSetup(win);
+        });
+    m_engine.load(url);
+}
+
 void Application::showSettings()
 {
     m_settings->reload();
-    if (m_settingsWindow) {
+    ensureSettingsWindow();
+
+    auto present = [this]() {
+        if (!m_settingsWindow)
+            return;
+#ifdef Q_OS_WIN
+        applyDarkTitleBar(m_settingsWindow);
+#endif
         m_settingsWindow->show();
         m_settingsWindow->raise();
         m_settingsWindow->requestActivate();
 #ifdef Q_OS_WIN
         applyDarkTitleBar(m_settingsWindow);
 #endif
+    };
+
+    if (m_settingsWindow) {
+        present();
         return;
     }
 
-    const QUrl url(QStringLiteral("qrc:/qt/qml/CheetahClip/qml/SettingsWindow.qml"));
-    QObject::connect(
+    // 预加载尚未完成时，等窗口创建好再显示
+    QMetaObject::Connection *conn = new QMetaObject::Connection;
+    *conn = QObject::connect(
         &m_engine, &QQmlApplicationEngine::objectCreated, this,
-        [this](QObject *obj, const QUrl &objUrl) {
-            if (!obj && objUrl.path().endsWith(QLatin1String("SettingsWindow.qml")))
+        [this, present, conn](QObject *obj, const QUrl &objUrl) {
+            if (!obj || !objUrl.path().endsWith(QLatin1String("SettingsWindow.qml")))
                 return;
+            QObject::disconnect(*conn);
+            delete conn;
             if (auto *win = qobject_cast<QQuickWindow *>(obj)) {
-                m_settingsWindow = win;
-                QObject::connect(win, &QObject::destroyed, this, [this]() { m_settingsWindow = nullptr; });
-                win->show();
-                win->requestActivate();
-#ifdef Q_OS_WIN
-                applyDarkTitleBar(win);
-                // 再刷一次，确保 DWM 生效
-                QTimer::singleShot(0, win, [win]() { applyDarkTitleBar(win); });
-#endif
+                finishSettingsWindowSetup(win);
+                present();
             }
-        },
-        Qt::SingleShotConnection);
-    m_engine.load(url);
+        });
 }
 
 void Application::startCapture()

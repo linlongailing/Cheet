@@ -29,6 +29,8 @@ public slots:
 
 private:
     void registerHotkeyFromSettings();
+    void ensureSettingsWindow();
+    void finishSettingsWindowSetup(QQuickWindow *win);
 
     SettingsController *m_settings = nullptr;
     TrayIcon *m_tray = nullptr;
@@ -38,4 +40,5 @@ private:
     std::atomic_bool m_busy{false};
     QQmlApplicationEngine m_engine;
     QQuickWindow *m_settingsWindow = nullptr;
+    bool m_settingsLoading = false;
 };
