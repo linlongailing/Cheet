@@ -8,6 +8,7 @@
 #include "tray/TrayIcon.h"
 
 #include <QApplication>
+#include <QDebug>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickStyle>
@@ -196,7 +197,7 @@ void Application::startCapture()
     bool expected = false;
     if (!m_busy.compare_exchange_strong(expected, true, std::memory_order_acq_rel))
         return;
-    m_settings->reload();
+    // 使用内存中的当前设置，勿 reload：否则会冲掉未点「保存」的客户端开关等改动
     m_capture->setSettings(m_settings->current());
     m_capture->startCapture();
 }
@@ -206,5 +207,8 @@ void Application::onAiInquire(const QPixmap &image)
     // 发送期间保持 busy（captureFinished 可能先清掉）
     m_busy.store(true, std::memory_order_release);
     m_tray->notify(I18n::instance().tr(QStringLiteral("notify_sending")));
-    m_ai->sendAsync(m_settings->current(), image);
+    const Settings s = m_settings->current();
+    qDebug("AiSender route: site=%s useDesktop=%d", qPrintable(s.normalizedSite()),
+           int(s.useDesktopClient));
+    m_ai->sendAsync(s, image);
 }

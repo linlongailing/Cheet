@@ -6,19 +6,28 @@ Item {
     property var model: []
     property string currentKey: ""
     property string currentLabel: ""
+    property string currentIcon: ""
     property bool opened: false
     signal activated(string key)
 
     height: 44
 
+    function itemIcon(item) {
+        if (!item)
+            return ""
+        return item.icon || ""
+    }
+
     function syncLabel() {
         for (let i = 0; i < model.length; ++i) {
             if (model[i].key === currentKey) {
                 currentLabel = model[i].label
+                currentIcon = itemIcon(model[i])
                 return
             }
         }
         currentLabel = model.length ? model[0].label : ""
+        currentIcon = model.length ? itemIcon(model[0]) : ""
     }
 
     function openMenu() {
@@ -50,7 +59,6 @@ Item {
         opened = false
         dropdown.visible = false
         dismissLayer.visible = false
-        // 收回节点，避免占着窗口
         dropdown.parent = root
         dismissLayer.parent = root
     }
@@ -66,7 +74,6 @@ Item {
     onCurrentKeyChanged: syncLabel()
     Component.onCompleted: syncLabel()
 
-    // 语言切换后 model 标签变化时刷新显示
     Connections {
         target: typeof settingsController !== "undefined" ? settingsController : null
         function onLanguageChanged() { root.syncLabel() }
@@ -81,11 +88,25 @@ Item {
         border.width: 2
         border.color: root.opened ? "#9aa0aa" : "#7a808c"
 
-        Text {
+        Image {
+            id: currentIconImg
             anchors.left: parent.left
+            anchors.leftMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            width: 22
+            height: 22
+            visible: root.currentIcon.length > 0
+            source: root.currentIcon
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            mipmap: true
+        }
+
+        Text {
+            anchors.left: currentIconImg.visible ? currentIconImg.right : parent.left
             anchors.right: arrow.left
             anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 12
+            anchors.leftMargin: currentIconImg.visible ? 8 : 12
             anchors.rightMargin: 8
             text: root.currentLabel
             color: "#f2f2f2"
@@ -111,7 +132,6 @@ Item {
         }
     }
 
-    // 点空白处收起（挂到窗口后盖住整页，再点框也会落到这里从而收起）
     MouseArea {
         id: dismissLayer
         visible: false
@@ -122,7 +142,7 @@ Item {
         id: dropdown
         visible: false
         width: root.width
-        height: Math.min(Math.max(root.model.length, 1) * 40 + 12, 212)
+        height: Math.min(Math.max(root.model.length, 1) * 40 + 12, 280)
         radius: 10
         color: "#2a2c32"
         border.width: 1
@@ -144,9 +164,25 @@ Item {
                 radius: 6
                 color: rowMa.containsMouse ? "#3a3d45" : "#2a2c32"
 
-                Text {
+                readonly property string rowIcon: (modelData && modelData.icon) ? modelData.icon : ""
+
+                Image {
+                    id: rowIconImg
                     anchors.left: parent.left
                     anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 20
+                    height: 20
+                    visible: parent.rowIcon.length > 0
+                    source: parent.rowIcon
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    mipmap: true
+                }
+
+                Text {
+                    anchors.left: rowIconImg.visible ? rowIconImg.right : parent.left
+                    anchors.leftMargin: rowIconImg.visible ? 8 : 10
                     anchors.verticalCenter: parent.verticalCenter
                     text: modelData.label
                     color: "#f2f2f2"

@@ -1,5 +1,6 @@
 #include "settings/SettingsController.h"
 
+#include "ai/SiteCatalog.h"
 #include "ai/WinInput.h"
 #include "autostart/Autostart.h"
 #include "i18n/I18n.h"
@@ -129,6 +130,8 @@ void SettingsController::setBrowser(const QString &v)
     if (m_settings.browser == v)
         return;
     m_settings.browser = v;
+    if (m_settings.save())
+        m_original.browser = m_settings.browser;
     emit browserChanged();
 }
 
@@ -137,6 +140,8 @@ void SettingsController::setTargetSite(const QString &v)
     if (m_settings.targetSite == v)
         return;
     m_settings.targetSite = v;
+    if (m_settings.save())
+        m_original.targetSite = m_settings.targetSite;
     emit targetSiteChanged();
     refreshDesktopHint();
 }
@@ -146,6 +151,9 @@ void SettingsController::setUseDesktopClient(bool v)
     if (m_settings.useDesktopClient == v)
         return;
     m_settings.useDesktopClient = v;
+    // 开关立即落盘，避免只拨开关未点保存、或截图前被 reload 冲掉
+    if (m_settings.save())
+        m_original.useDesktopClient = v;
     emit useDesktopClientChanged();
     refreshDesktopHint();
 }
@@ -169,12 +177,14 @@ void SettingsController::setStartWithWindows(bool v)
 QVariantList SettingsController::siteOptions() const
 {
     QVariantList list;
-    for (const auto &p : {std::pair{QStringLiteral("chatgpt"), QStringLiteral("ChatGPT")},
-                          {QStringLiteral("gemini"), QStringLiteral("Gemini")},
-                          {QStringLiteral("claude"), QStringLiteral("Claude")}}) {
+    const QStringList keys{QStringLiteral("chatgpt"), QStringLiteral("gemini"),
+                           QStringLiteral("claude"),  QStringLiteral("doubao"),
+                           QStringLiteral("qwen"),    QStringLiteral("deepseek")};
+    for (const QString &key : keys) {
         QVariantMap m;
-        m.insert(QStringLiteral("key"), p.first);
-        m.insert(QStringLiteral("label"), p.second);
+        m.insert(QStringLiteral("key"), key);
+        m.insert(QStringLiteral("label"), SiteCatalog::siteLabel(key));
+        m.insert(QStringLiteral("icon"), SiteCatalog::siteIconPath(key));
         list.push_back(m);
     }
     return list;
@@ -265,15 +275,10 @@ void SettingsController::cancel()
 
 void SettingsController::refreshDesktopHint()
 {
+    WinInput::invalidateDesktopCache();
     auto &i18n = I18n::instance();
     const QString site = m_settings.normalizedSite();
-    QString siteName = site;
-    if (site == QLatin1String("chatgpt"))
-        siteName = QStringLiteral("ChatGPT");
-    else if (site == QLatin1String("gemini"))
-        siteName = QStringLiteral("Gemini");
-    else if (site == QLatin1String("claude"))
-        siteName = QStringLiteral("Claude");
+    const QString siteName = SiteCatalog::siteLabel(site);
 
     if (!m_settings.useDesktopClient) {
         m_desktopHint = i18n.tr(QStringLiteral("desktop_hint_off"));

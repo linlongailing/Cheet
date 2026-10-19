@@ -2,7 +2,7 @@
 
 [中文](README.zh-CN.md)
 
-A Windows tray screenshot tool built with **C++ and Qt Quick (QML)**. Capture a region, annotate it, copy to the clipboard, or send an AI inquire to ChatGPT / Gemini / Claude (desktop app or browser).
+A Windows tray screenshot tool built with **C++ and Qt Quick (QML)**. Capture a region, annotate it, copy to the clipboard, or send an AI inquire to ChatGPT / Gemini / Claude / 豆包 / 千问 / DeepSeek (desktop app or browser).
 
 Settings are stored at: `%LOCALAPPDATA%\Cheet\settings.json`
 
@@ -17,7 +17,7 @@ Settings are stored at: `%LOCALAPPDATA%\Cheet\settings.json`
 - Dark settings UI (capture & hotkey / AI inquire / general)
 - Chinese & English UI, start with Windows
 - Full-screen selection with annotations (rectangle / ellipse / arrow / pen / text / undo)
-- AI inquire: prefer the desktop app when enabled; otherwise find or open the target browser tab → paste image & prompt → wait for upload → send
+- AI inquire (ChatGPT / Gemini / Claude / 豆包 / 千问 / DeepSeek): prefer the desktop app when enabled; otherwise find or open the target browser tab → paste image & prompt → wait for upload → send
 
 ## Requirements
 

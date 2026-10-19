@@ -65,6 +65,10 @@ I18n::I18n(QObject *parent)
     zh[QStringLiteral("notify_desktop_fallback")] = QStringLiteral("未找到 {site} 桌面客户端，改用浏览器…");
     zh[QStringLiteral("notify_failed")] = QStringLiteral("截图发送失败：{err}");
     zh[QStringLiteral("notify_sending")] = QStringLiteral("正在粘贴图片并发送…");
+    zh[QStringLiteral("notify_image_blocked")] =
+        QStringLiteral("{site} 无法接收图片（未登录/套餐限制或不支持），已取消贴字与发送。截图仍在剪贴板中。");
+    zh[QStringLiteral("notify_image_failed")] =
+        QStringLiteral("{site} 未能附上图片（可能未登录），已取消贴字与发送。截图仍在剪贴板中。");
     zh[QStringLiteral("capture_tip")] =
         QStringLiteral("拖拽框选；用工具栏标注，点「AI问询」发送，或 ✓ 仅复制");
     zh[QStringLiteral("tool_rect")] = QStringLiteral("矩形");
@@ -137,6 +141,10 @@ I18n::I18n(QObject *parent)
     en[QStringLiteral("notify_desktop_fallback")] = QStringLiteral("{site} desktop app not found — using browser…");
     en[QStringLiteral("notify_failed")] = QStringLiteral("Failed to send screenshot: {err}");
     en[QStringLiteral("notify_sending")] = QStringLiteral("Pasting image and sending…");
+    en[QStringLiteral("notify_image_blocked")] =
+        QStringLiteral("{site} cannot accept images (not signed in / plan limit). Text paste and send cancelled; screenshot is still on the clipboard.");
+    en[QStringLiteral("notify_image_failed")] =
+        QStringLiteral("Could not attach the image in {site} (maybe not signed in). Text paste and send cancelled; screenshot is still on the clipboard.");
     en[QStringLiteral("capture_tip")] =
         QStringLiteral("Drag to select; annotate with the toolbar, AI Inquire to send, or ✓ to copy only");
     en[QStringLiteral("tool_rect")] = QStringLiteral("Rectangle");

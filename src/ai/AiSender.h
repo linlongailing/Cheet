@@ -21,9 +21,10 @@ signals:
     void finished(bool ok);
 
 private:
-    bool sendSync(const Settings &settings);
+    bool sendSync(const Settings &settings, const QPixmap &image);
     /** desktopMode=true 只走桌面端；窗口中途关闭立即返回 false。 */
-    bool pastePromptAndSend(const Settings &settings, quintptr hwndValue, bool desktopMode);
+    bool pastePromptAndSend(const Settings &settings, quintptr hwndValue, bool desktopMode,
+                            const QPixmap &image);
     QString saveTempImage(const QPixmap &image) const;
 
     void emitNotify(const QString &msg);

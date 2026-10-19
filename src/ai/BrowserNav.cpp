@@ -4,11 +4,8 @@
 #include "ai/WinInput.h"
 #include "platform/UiaCore.h"
 
-#include <QApplication>
-#include <QClipboard>
 #include <QDebug>
 #include <QList>
-#include <QMetaObject>
 #include <QRegularExpression>
 #include <QUrl>
 
@@ -61,37 +58,63 @@ bool looksLikeUrl(const QString &val)
     return re.match(val).hasMatch();
 }
 
-void setClipboardText(const QString &text)
-{
-    QMetaObject::invokeMethod(
-        qApp, [text]() { QApplication::clipboard()->setText(text); }, Qt::BlockingQueuedConnection);
-}
-
-void clickElement(IUIAutomationElement *el)
+/** 激活标签：优先 SelectionItem/Invoke，绝不挪动鼠标指针 */
+bool activateTabElement(IUIAutomationElement *el)
 {
     if (!el)
-        return;
-    RECT br{};
-    el->get_CurrentBoundingRectangle(&br);
-    if (br.right > br.left && br.bottom > br.top) {
-        const int cx = (br.left + br.right) / 2;
-        const int cy = (br.top + br.bottom) / 2;
-        SetCursorPos(cx, cy);
-        INPUT ins[2]{};
-        ins[0].type = INPUT_MOUSE;
-        ins[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-        ins[1].type = INPUT_MOUSE;
-        ins[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-        SendInput(2, ins, sizeof(INPUT));
-        return;
+        return false;
+    IUIAutomationSelectionItemPattern *sel = nullptr;
+    if (SUCCEEDED(el->GetCurrentPatternAs(UIA_SelectionItemPatternId,
+                                          IID_IUIAutomationSelectionItemPattern,
+                                          reinterpret_cast<void **>(&sel)))
+        && sel) {
+        const HRESULT hr = sel->Select();
+        sel->Release();
+        if (SUCCEEDED(hr))
+            return true;
     }
     IUIAutomationInvokePattern *inv = nullptr;
     if (SUCCEEDED(el->GetCurrentPatternAs(UIA_InvokePatternId, IID_IUIAutomationInvokePattern,
                                           reinterpret_cast<void **>(&inv)))
         && inv) {
-        inv->Invoke();
+        const HRESULT hr = inv->Invoke();
         inv->Release();
+        if (SUCCEEDED(hr))
+            return true;
     }
+    // LegacyIAccessible DoDefaultAction（仍无鼠标）
+    IUIAutomationLegacyIAccessiblePattern *leg = nullptr;
+    if (SUCCEEDED(el->GetCurrentPatternAs(UIA_LegacyIAccessiblePatternId,
+                                          IID_IUIAutomationLegacyIAccessiblePattern,
+                                          reinterpret_cast<void **>(&leg)))
+        && leg) {
+        const HRESULT hr = leg->DoDefaultAction();
+        leg->Release();
+        return SUCCEEDED(hr);
+    }
+    return false;
+}
+
+/** Chrome/Edge/Firefox：Ctrl+1..8 选第 1–8 个标签；更远则 Ctrl+1 再 Ctrl+PageDown */
+bool focusTabByIndex(HWND hwnd, int index0)
+{
+    if (index0 < 0 || !platform::windowAlive(hwnd))
+        return false;
+    WinInput::setForeground(hwnd);
+    if (index0 < 8) {
+        WinInput::sendCtrlKey(static_cast<WORD>('1' + index0));
+        WinInput::sleepMs(280);
+        return true;
+    }
+    WinInput::sendCtrlKey('1');
+    WinInput::sleepMs(220);
+    for (int i = 0; i < index0; ++i) {
+        if (!platform::windowAlive(hwnd))
+            return false;
+        WinInput::sendCtrlKey(VK_NEXT);
+        WinInput::sleepMs(220);
+    }
+    return true;
 }
 
 void collectTabs(IUIAutomationElement *el, int depth, QList<IUIAutomationElement *> &tabs)
@@ -208,100 +231,108 @@ IUIAutomationElement *findEditByNames(IUIAutomationElement *el, const QStringLis
     return nullptr;
 }
 
-bool scanTabsLeftToRight(HWND hwnd, const QString &browser, const QString &site)
+/** 不切换标签，只读 UIA 元数据（标题/帮助/值/描述） */
+QString tabProbeText(IUIAutomationElement *el)
 {
-    Q_UNUSED(browser);
-    auto root = platform::UiaCore::instance().elementFromHwnd(hwnd);
-    QList<IUIAutomationElement *> tabs;
-    if (root)
-        collectTabs(root.get(), 0, tabs);
-    const int n = tabs.size();
-    const int limit = n > 0 ? n : 50;
-    for (IUIAutomationElement *t : tabs)
-        t->Release();
+    if (!el)
+        return {};
+    QStringList parts;
+    parts << nameOf(el) << valueOf(el);
 
-    if (!platform::windowAlive(hwnd))
-        return false;
-    WinInput::setForeground(hwnd);
-    WinInput::sendCtrlKey('1');
-    WinInput::sleepMs(300);
-    QString prev;
-    for (int i = 0; i < limit; ++i) {
-        if (!platform::windowAlive(hwnd))
-            return false;
-        const QString url = readAddressBarUrl(hwnd);
-        qDebug() << "BrowserNav scan[" << i << "] url=" << url;
-        if (isTargetUrl(url, site))
-            return true;
-        if (n == 0 && !url.isEmpty() && url == prev)
-            break;
-        prev = url;
-        if (i < limit - 1) {
-            // Ctrl+PageDown
-            WinInput::sendCtrlKey(VK_NEXT);
-            WinInput::sleepMs(280);
-        }
+    BSTR helpB = nullptr;
+    el->get_CurrentHelpText(&helpB);
+    if (helpB) {
+        parts << QString::fromWCharArray(helpB);
+        SysFreeString(helpB);
     }
-    return false;
+
+    IUIAutomationLegacyIAccessiblePattern *leg = nullptr;
+    if (SUCCEEDED(el->GetCurrentPatternAs(UIA_LegacyIAccessiblePatternId,
+                                          IID_IUIAutomationLegacyIAccessiblePattern,
+                                          reinterpret_cast<void **>(&leg)))
+        && leg) {
+        BSTR desc = nullptr;
+        BSTR val = nullptr;
+        leg->get_CurrentDescription(&desc);
+        leg->get_CurrentValue(&val);
+        if (desc) {
+            parts << QString::fromWCharArray(desc);
+            SysFreeString(desc);
+        }
+        if (val) {
+            parts << QString::fromWCharArray(val);
+            SysFreeString(val);
+        }
+        leg->Release();
+    }
+    return parts.join(QLatin1Char(' ')).toLower();
 }
 
-bool clickTabsUntilTarget(HWND hwnd, const QString &site)
+int scoreTabProbe(const QString &probe, const QString &site)
+{
+    if (probe.isEmpty())
+        return 0;
+    int score = 0;
+    for (const QString &h : SiteCatalog::urlHints(site)) {
+        if (probe.contains(h))
+            score += 20;
+    }
+    for (const QString &h : SiteCatalog::searchKeywords(site)) {
+        if (probe.contains(h.toLower()))
+            score += 15;
+    }
+    for (const QString &h : SiteCatalog::tabTitleHints(site)) {
+        if (probe.contains(h))
+            score += 10;
+    }
+    return score;
+}
+
+/**
+ * 静默搜标签：只扫 UIA，不 Ctrl+Tab / 不弹标签搜索框。
+ * 命中后只激活一次目标标签；失败返回 false（由上层新开页）。
+ */
+bool findAndActivateTargetTabSilent(HWND hwnd, const QString &site)
 {
     auto root = platform::UiaCore::instance().elementFromHwnd(hwnd);
     if (!root)
         return false;
-    QList<IUIAutomationElement *> tabs;
-    collectTabs(root.get(), 0, tabs);
-    WinInput::setForeground(hwnd);
-    bool found = false;
-    for (IUIAutomationElement *tab : tabs) {
-        clickElement(tab);
-        WinInput::sleepMs(300);
-        if (isTargetUrl(readAddressBarUrl(hwnd), site)) {
-            found = true;
-            break;
-        }
-    }
-    for (IUIAutomationElement *tab : tabs)
-        tab->Release();
-    return found;
-}
 
-bool clickTabByTitle(HWND hwnd, const QString &site)
-{
-    auto root = platform::UiaCore::instance().elementFromHwnd(hwnd);
-    if (!root)
-        return false;
     QList<IUIAutomationElement *> tabs;
     collectTabs(root.get(), 0, tabs);
-    const QStringList hints = SiteCatalog::tabTitleHints(site);
-    bool found = false;
-    for (IUIAutomationElement *tab : tabs) {
-        const QString low = nameOf(tab).toLower();
-        bool hit = false;
-        for (const QString &h : hints) {
-            if (low.contains(h)) {
-                hit = true;
-                break;
-            }
+    if (tabs.isEmpty())
+        return false;
+
+    int bestIdx = -1;
+    int bestScore = 0;
+    for (int i = 0; i < tabs.size(); ++i) {
+        const QString probe = tabProbeText(tabs[i]);
+        const int score = scoreTabProbe(probe, site);
+        if (score > bestScore) {
+            bestScore = score;
+            bestIdx = i;
         }
-        if (!hit)
-            continue;
-        clickElement(tab);
-        WinInput::sleepMs(350);
-        if (isTargetUrl(readAddressBarUrl(hwnd), site)) {
-            found = true;
-            break;
-        }
-        WinInput::sleepMs(350);
-        if (isTargetUrl(readAddressBarUrl(hwnd), site)) {
-            found = true;
-            break;
-        }
+        qDebug() << "BrowserNav silent tab[" << i << "] score=" << score << probe.left(80);
     }
+
+    bool ok = false;
+    if (bestIdx >= 0 && bestScore > 0) {
+        // 只切这一次，不遍历其它标签
+        if (!activateTabElement(tabs[bestIdx]))
+            focusTabByIndex(hwnd, bestIdx);
+        WinInput::sleepMs(400);
+        ok = isTargetUrl(readAddressBarUrl(hwnd), site);
+        if (!ok) {
+            // 标题误匹配时再等一瞬（地址栏刷新）
+            WinInput::sleepMs(350);
+            ok = isTargetUrl(readAddressBarUrl(hwnd), site);
+        }
+        qDebug() << "BrowserNav silent activate idx=" << bestIdx << "ok=" << ok;
+    }
+
     for (IUIAutomationElement *tab : tabs)
         tab->Release();
-    return found;
+    return ok;
 }
 
 } // namespace
@@ -363,79 +394,36 @@ QString readAddressBarUrl(HWND hwnd)
 
 bool selectTargetTabByUrl(HWND hwnd, const QString &browser, const QString &site)
 {
+    Q_UNUSED(browser);
     if (!platform::windowAlive(hwnd))
         return false;
     const QString s = site.toLower();
-    const QString b = browser.toLower();
     const QString cur = readAddressBarUrl(hwnd);
     qDebug() << "BrowserNav current url=" << cur << "site=" << s;
     if (isTargetUrl(cur, s))
         return true;
 
-    WinInput::setForeground(hwnd);
-    WinInput::sleepMs(150);
+    // 静默：UIA 读标签元数据找目标；命中只激活一次。找不到 → false，上层直接新开页
+    // 不再 Ctrl+PageDown 扫标签，也不弹 Ctrl+Shift+A 搜索框
     if (!platform::windowAlive(hwnd))
         return false;
+    return findAndActivateTargetTabSilent(hwnd, s);
+}
 
-    if (scanTabsLeftToRight(hwnd, b, s))
-        return true;
-    if (!platform::windowAlive(hwnd))
-        return false;
-    if (clickTabsUntilTarget(hwnd, s))
-        return true;
-    if (!platform::windowAlive(hwnd))
-        return false;
-    if (clickTabByTitle(hwnd, s))
-        return true;
-    if (!platform::windowAlive(hwnd))
-        return false;
-
-    // Ctrl+Shift+A：Edge/Chrome 标签搜索；Firefox 是附加组件，跳过
-    if (b != QLatin1String("firefox")) {
-        for (const QString &keyword : SiteCatalog::searchKeywords(s)) {
-            if (!platform::windowAlive(hwnd))
-                return false;
-            WinInput::sendKey(VK_ESCAPE);
-            WinInput::sleepMs(100);
-            WinInput::sendCtrlShiftKey('A');
-            WinInput::sleepMs(550);
-            WinInput::sendCtrlKey('A');
-            WinInput::sleepMs(50);
-            setClipboardText(keyword);
-            WinInput::sendCtrlKey('V');
-            WinInput::sleepMs(500);
-            WinInput::sendKey(VK_DOWN);
-            WinInput::sleepMs(120);
-            WinInput::sendEnter();
-            WinInput::sleepMs(400);
-            if (!platform::windowAlive(hwnd))
-                return false;
-            if (isTargetUrl(readAddressBarUrl(hwnd), s))
-                return true;
-            WinInput::sendKey(VK_ESCAPE);
-            WinInput::sleepMs(100);
-        }
-    }
-    if (!platform::windowAlive(hwnd))
-        return false;
-    return isTargetUrl(readAddressBarUrl(hwnd), s);
+bool navigateCurrentTab(HWND hwnd, const QString &url)
+{
+    Q_UNUSED(hwnd);
+    Q_UNUSED(url);
+    // 已废弃地址栏键入；请用 WinInput::launchBrowser(browser, url)
+    return false;
 }
 
 bool openUrlInNewTab(HWND hwnd, const QString &url)
 {
-    if (!hwnd || url.isEmpty())
-        return false;
-    WinInput::setForeground(hwnd);
-    WinInput::sleepMs(100);
-    WinInput::sendCtrlKey('T');
-    WinInput::sleepMs(350);
-    WinInput::sendCtrlKey('L');
-    WinInput::sleepMs(200);
-    setClipboardText(url);
-    WinInput::sendCtrlKey('V');
-    WinInput::sleepMs(120);
-    WinInput::sendEnter();
-    return true;
+    Q_UNUSED(hwnd);
+    Q_UNUSED(url);
+    // 已废弃 Ctrl+T + 打字；请用 WinInput::launchBrowser(browser, url)
+    return false;
 }
 
 bool waitAddressBarTarget(HWND hwnd, const QString &site, int timeoutMs)
@@ -498,25 +486,24 @@ HWND focusOrOpenTarget(const QString &browser, const QString &site, const QStrin
         return nullptr;
 
     if (!found) {
-        qDebug() << "BrowserNav no target tab, open new tab" << url;
+        // 没有目标标签：用浏览器 --new-tab 直接打开，绝不在地址栏逐字输入
+        qDebug() << "BrowserNav no target tab, launchBrowser" << url;
+        if (!WinInput::launchBrowser(b, url))
+            return nullptr;
+        if (launched)
+            *launched = true;
+        WinInput::sleepMs(1000);
+        hwnd = WinInput::findBrowserWindow(b);
+        if (!hwnd)
+            return nullptr;
         WinInput::setForeground(hwnd);
-        openUrlInNewTab(hwnd, url);
-        if (!platform::windowAlive(hwnd))
-            return nullptr;
-        found = waitAddressBarTarget(hwnd, s, 15000);
-        if (!platform::windowAlive(hwnd))
-            return nullptr;
-        if (!found) {
-            // 兜底：外部再开一次
-            WinInput::launchBrowser(b, url);
-            WinInput::sleepMs(1500);
-            hwnd = WinInput::findBrowserWindow(b);
-            if (!hwnd)
-                return nullptr;
-            waitAddressBarTarget(hwnd, s, 15000);
-            if (!platform::windowAlive(hwnd))
-                return nullptr;
+        found = waitAddressBarTarget(hwnd, s, 20000);
+        if (!found && platform::windowAlive(hwnd)) {
+            // 新标签可能未置前：再静默匹配一次标题/域名
+            found = selectTargetTabByUrl(hwnd, b, s);
         }
+        if (!platform::windowAlive(hwnd))
+            return nullptr;
     }
 
     if (!platform::windowAlive(hwnd))

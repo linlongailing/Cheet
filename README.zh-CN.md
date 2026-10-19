@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Windows 托盘截图工具，基于 **C++ + Qt Quick (QML)**。支持框选标注、复制到剪贴板，以及一键问询 ChatGPT / Gemini / Claude（桌面客户端或浏览器）。
+Windows 托盘截图工具，基于 **C++ + Qt Quick (QML)**。支持框选标注、复制到剪贴板，以及一键问询 ChatGPT / Gemini / Claude / 豆包 / 千问 / DeepSeek（桌面客户端或浏览器）。
 
 设置保存在：`%LOCALAPPDATA%\Cheet\settings.json`
 
@@ -17,7 +17,7 @@ Windows 托盘截图工具，基于 **C++ + Qt Quick (QML)**。支持框选标�
 - 深色设置窗口（截图与快捷键 / AI 问询 / 常规）
 - 中英文界面、开机自启
 - 全屏框选 + 标注（矩形 / 椭圆 / 箭头 / 画笔 / 文字 / 撤销）
-- AI 问询：优先桌面客户端，否则在浏览器中定位目标标签页或新开页面 → 粘贴图片与提示词 → 监测上传完成后发送
+- AI 问询（ChatGPT / Gemini / Claude / 豆包 / 千问 / DeepSeek）：优先桌面客户端，否则在浏览器中定位目标标签页或新开页面 → 粘贴图片与提示词 → 监测上传完成后发送
 
 ## 环境
 

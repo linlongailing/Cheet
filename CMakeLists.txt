@@ -30,6 +30,7 @@ endif()
 set(APP_SOURCES
     src/main.cpp
     src/app/Application.cpp
+    src/app/SingleInstance.cpp
     src/settings/Settings.cpp
     src/settings/SettingsController.cpp
     src/i18n/I18n.cpp
@@ -75,6 +76,12 @@ qt_add_qml_module(cheetahClip
         resources/icons/tools/undo.png
         resources/icons/tools/cancel.png
         resources/icons/tools/ok.png
+        resources/icons/sites/chatgpt.png
+        resources/icons/sites/gemini.png
+        resources/icons/sites/claude.png
+        resources/icons/sites/doubao.png
+        resources/icons/sites/qwen.png
+        resources/icons/sites/deepseek.png
 )
 
 target_include_directories(cheetahClip PRIVATE src)

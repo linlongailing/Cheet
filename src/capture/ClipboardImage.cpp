@@ -2,6 +2,7 @@
 
 #include <QBuffer>
 #include <QClipboard>
+#include <QDateTime>
 #include <QDir>
 #include <QGuiApplication>
 #include <QImage>
@@ -32,7 +33,9 @@ QString saveTempPng(const QImage &img)
     if (dir.isEmpty() || img.isNull())
         return {};
     QDir().mkpath(dir);
-    const QString path = dir + QStringLiteral("/Cheet_clipboard.png");
+    // 每次截图用时间戳文件名，粘贴到桌面/文件夹时不会互相覆盖
+    const QString path =
+        dir + QStringLiteral("/Cheet_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
     if (!img.save(path, "PNG"))
         return {};
     return QDir::toNativeSeparators(path);
@@ -40,7 +43,7 @@ QString saveTempPng(const QImage &img)
 
 #ifdef Q_OS_WIN
 
-bool setClipboardWin(const QImage &img, const QString &filePath)
+bool setClipboardWin(const QImage &img, const QString &filePath, bool includeHdrop)
 {
     QImage rgb = img.convertToFormat(QImage::Format_RGB32);
     if (rgb.isNull())
@@ -84,12 +87,14 @@ bool setClipboardWin(const QImage &img, const QString &filePath)
 
     bool ok = false;
 
-    // PNG（Chrome / Edge 网页粘贴）
+    // PNG（Chrome / Edge / 豆包网页粘贴）
     if (!png.isEmpty()) {
-        const UINT cfPng = RegisterClipboardFormatW(L"PNG");
-        if (cfPng) {
+        for (const wchar_t *fmt : {L"PNG", L"image/png"}) {
+            const UINT cf = RegisterClipboardFormatW(fmt);
+            if (!cf)
+                continue;
             if (HGLOBAL h = allocMoveable(png.constData(), static_cast<size_t>(png.size()))) {
-                if (SetClipboardData(cfPng, h))
+                if (SetClipboardData(cf, h))
                     ok = true;
                 else
                     GlobalFree(h);
@@ -105,8 +110,8 @@ bool setClipboardWin(const QImage &img, const QString &filePath)
             GlobalFree(h);
     }
 
-    // CF_HDROP：桌面 / 文件夹「粘贴」出文件
-    if (!filePath.isEmpty()) {
+    // CF_HDROP：桌面 / 文件夹「粘贴」出文件（网页端勿带，避免豆包不走上图）
+    if (includeHdrop && !filePath.isEmpty()) {
         const std::wstring wpath = filePath.toStdWString();
         const size_t pathBytes = (wpath.size() + 1) * sizeof(wchar_t);
         const size_t total = sizeof(DROPFILES) + pathBytes + sizeof(wchar_t); // 双 \0 结尾
@@ -145,7 +150,7 @@ QString copyForPaste(const QPixmap &image)
     const QString path = saveTempPng(img);
 
 #ifdef Q_OS_WIN
-    if (setClipboardWin(img, path))
+    if (setClipboardWin(img, path, true))
         return path;
 #endif
 
@@ -160,6 +165,31 @@ QString copyForPaste(const QPixmap &image)
         mime->setData(QStringLiteral("image/png"), png);
     if (!path.isEmpty())
         mime->setUrls({QUrl::fromLocalFile(path)});
+    QGuiApplication::clipboard()->setMimeData(mime);
+    return path;
+}
+
+QString copyForWebPaste(const QPixmap &image)
+{
+    if (image.isNull())
+        return {};
+
+    const QImage img = image.toImage();
+    const QString path = saveTempPng(img);
+
+#ifdef Q_OS_WIN
+    if (setClipboardWin(img, path, false))
+        return path;
+#endif
+
+    auto *mime = new QMimeData;
+    mime->setImageData(img);
+    QByteArray png;
+    QBuffer buf(&png);
+    buf.open(QIODevice::WriteOnly);
+    img.save(&buf, "PNG");
+    if (!png.isEmpty())
+        mime->setData(QStringLiteral("image/png"), png);
     QGuiApplication::clipboard()->setMimeData(mime);
     return path;
 }

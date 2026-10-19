@@ -13,4 +13,10 @@ namespace ClipboardImage {
  */
 QString copyForPaste(const QPixmap &image);
 
+/**
+ * 浏览器网页粘贴专用：只放 PNG / DIB / image/png，不带 CF_HDROP。
+ * 豆包等站点在同时有文件列表时可能不走上图逻辑。
+ */
+QString copyForWebPaste(const QPixmap &image);
+
 } // namespace ClipboardImage
