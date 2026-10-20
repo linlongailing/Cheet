@@ -20,15 +20,14 @@
 #ifdef WIN32_LEAN_AND_MEAN
 #undef WIN32_LEAN_AND_MEAN
 #endif
-#include <windows.h>
 #include <shlobj.h>
+#include <windows.h>
 #endif
 
 namespace ClipboardImage {
 namespace {
 
-QString saveTempPng(const QImage &img)
-{
+QString saveTempPng(const QImage& img) {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
     if (dir.isEmpty() || img.isNull())
         return {};
@@ -43,8 +42,7 @@ QString saveTempPng(const QImage &img)
 
 #ifdef Q_OS_WIN
 
-bool setClipboardWin(const QImage &img, const QString &filePath, bool includeHdrop)
-{
+bool setClipboardWin(const QImage& img, const QString& filePath, bool includeHdrop) {
     QImage rgb = img.convertToFormat(QImage::Format_RGB32);
     if (rgb.isNull())
         return false;
@@ -71,11 +69,11 @@ bool setClipboardWin(const QImage &img, const QString &filePath, bool includeHdr
         return false;
     EmptyClipboard();
 
-    auto allocMoveable = [](const void *data, size_t size) -> HGLOBAL {
+    auto allocMoveable = [](const void* data, size_t size) -> HGLOBAL {
         HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, size);
         if (!h)
             return nullptr;
-        void *p = GlobalLock(h);
+        void* p = GlobalLock(h);
         if (!p) {
             GlobalFree(h);
             return nullptr;
@@ -89,7 +87,7 @@ bool setClipboardWin(const QImage &img, const QString &filePath, bool includeHdr
 
     // PNG（Chrome / Edge / 豆包网页粘贴）
     if (!png.isEmpty()) {
-        for (const wchar_t *fmt : {L"PNG", L"image/png"}) {
+        for (const wchar_t* fmt : {L"PNG", L"image/png"}) {
             const UINT cf = RegisterClipboardFormatW(fmt);
             if (!cf)
                 continue;
@@ -116,12 +114,12 @@ bool setClipboardWin(const QImage &img, const QString &filePath, bool includeHdr
         const size_t pathBytes = (wpath.size() + 1) * sizeof(wchar_t);
         const size_t total = sizeof(DROPFILES) + pathBytes + sizeof(wchar_t); // 双 \0 结尾
         if (HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, total)) {
-            auto *df = static_cast<DROPFILES *>(GlobalLock(h));
+            auto* df = static_cast<DROPFILES*>(GlobalLock(h));
             if (df) {
                 memset(df, 0, total);
                 df->pFiles = sizeof(DROPFILES);
                 df->fWide = TRUE;
-                memcpy(reinterpret_cast<char *>(df) + sizeof(DROPFILES), wpath.c_str(), pathBytes);
+                memcpy(reinterpret_cast<char*>(df) + sizeof(DROPFILES), wpath.c_str(), pathBytes);
                 GlobalUnlock(h);
                 if (SetClipboardData(CF_HDROP, h))
                     ok = true;
@@ -141,8 +139,7 @@ bool setClipboardWin(const QImage &img, const QString &filePath, bool includeHdr
 
 } // namespace
 
-QString copyForPaste(const QPixmap &image)
-{
+QString copyForPaste(const QPixmap& image) {
     if (image.isNull())
         return {};
 
@@ -155,7 +152,7 @@ QString copyForPaste(const QPixmap &image)
 #endif
 
     // 非 Windows 或 Win32 失败时的 Qt 回退
-    auto *mime = new QMimeData;
+    auto* mime = new QMimeData;
     mime->setImageData(img);
     QByteArray png;
     QBuffer buf(&png);
@@ -169,8 +166,7 @@ QString copyForPaste(const QPixmap &image)
     return path;
 }
 
-QString copyForWebPaste(const QPixmap &image)
-{
+QString copyForWebPaste(const QPixmap& image) {
     if (image.isNull())
         return {};
 
@@ -182,7 +178,7 @@ QString copyForWebPaste(const QPixmap &image)
         return path;
 #endif
 
-    auto *mime = new QMimeData;
+    auto* mime = new QMimeData;
     mime->setImageData(img);
     QByteArray png;
     QBuffer buf(&png);

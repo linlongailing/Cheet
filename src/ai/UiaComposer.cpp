@@ -21,99 +21,146 @@ namespace UiaComposer {
 
 namespace {
 
-const QStringList kUploadingHints = {
-    QStringLiteral("上传中"), QStringLiteral("正在上传"), QStringLiteral("正在加载"),
-    QStringLiteral("处理中"), QStringLiteral("uploading"), QStringLiteral("loading"),
-    QStringLiteral("processing")};
+const QStringList kUploadingHints = {QStringLiteral("上传中"),
+                                     QStringLiteral("正在上传"),
+                                     QStringLiteral("正在加载"),
+                                     QStringLiteral("处理中"),
+                                     QStringLiteral("uploading"),
+                                     QStringLiteral("loading"),
+                                     QStringLiteral("processing")};
 const QStringList kSendHints = {QStringLiteral("发送"), QStringLiteral("send")};
-const QStringList kRemoveHints = {QStringLiteral("移除"), QStringLiteral("删除"), QStringLiteral("remove"),
-                                  QStringLiteral("去掉"), QStringLiteral("clear file")};
+const QStringList kRemoveHints = {QStringLiteral("移除"),
+                                  QStringLiteral("删除"),
+                                  QStringLiteral("remove"),
+                                  QStringLiteral("去掉"),
+                                  QStringLiteral("clear file")};
 /** 明确与「图片/文件上传失败或套餐限制」相关的文案（避免侧栏「升级」误报） */
 /** 豆包技能条等：绝不能点（会进「图像生成」等模式，不是上传附件） */
-const QStringList kSkillClickAvoid = {
-    QStringLiteral("图像生成"), QStringLiteral("图片生成"), QStringLiteral("生成图片"),
-    QStringLiteral("视频生成"), QStringLiteral("生成视频"), QStringLiteral("ppt"),
-    QStringLiteral("帮我写作"), QStringLiteral("录音转写"), QStringLiteral("音乐生成"),
-    QStringLiteral("create-image"), QStringLiteral("image generation"), QStringLiteral("skill")};
+const QStringList kSkillClickAvoid = {QStringLiteral("图像生成"),
+                                      QStringLiteral("图片生成"),
+                                      QStringLiteral("生成图片"),
+                                      QStringLiteral("视频生成"),
+                                      QStringLiteral("生成视频"),
+                                      QStringLiteral("ppt"),
+                                      QStringLiteral("帮我写作"),
+                                      QStringLiteral("录音转写"),
+                                      QStringLiteral("音乐生成"),
+                                      QStringLiteral("create-image"),
+                                      QStringLiteral("image generation"),
+                                      QStringLiteral("skill")};
 
 const QStringList kImageBlockHints = {
     // 中文 — 须直接相关上传/图片
-    QStringLiteral("不支持图片"), QStringLiteral("不支持上传图片"), QStringLiteral("无法上传图片"),
-    QStringLiteral("不能上传图片"), QStringLiteral("暂不支持图片"), QStringLiteral("暂不支持上传图片"),
-    QStringLiteral("图片上传失败"), QStringLiteral("上传图片失败"), QStringLiteral("图片发送失败"),
-    QStringLiteral("免费版不支持"), QStringLiteral("免费用户无法"), QStringLiteral("免费计划不支持"),
-    QStringLiteral("升级后才能上传"), QStringLiteral("升级后可上传"), QStringLiteral("会员才能上传"),
-    QStringLiteral("文件过大"), QStringLiteral("图片过大"), QStringLiteral("格式不支持"),
-    QStringLiteral("不支持该文件"), QStringLiteral("不支持此文件"), QStringLiteral("上传失败"),
+    QStringLiteral("不支持图片"),
+    QStringLiteral("不支持上传图片"),
+    QStringLiteral("无法上传图片"),
+    QStringLiteral("不能上传图片"),
+    QStringLiteral("暂不支持图片"),
+    QStringLiteral("暂不支持上传图片"),
+    QStringLiteral("图片上传失败"),
+    QStringLiteral("上传图片失败"),
+    QStringLiteral("图片发送失败"),
+    QStringLiteral("免费版不支持"),
+    QStringLiteral("免费用户无法"),
+    QStringLiteral("免费计划不支持"),
+    QStringLiteral("升级后才能上传"),
+    QStringLiteral("升级后可上传"),
+    QStringLiteral("会员才能上传"),
+    QStringLiteral("文件过大"),
+    QStringLiteral("图片过大"),
+    QStringLiteral("格式不支持"),
+    QStringLiteral("不支持该文件"),
+    QStringLiteral("不支持此文件"),
+    QStringLiteral("上传失败"),
     // 未登录 / 登录墙（网页常见：可打字但不可上传）
-    QStringLiteral("请先登录"), QStringLiteral("请登录"), QStringLiteral("登录后"), QStringLiteral("登录即可"),
-    QStringLiteral("立即登录"), QStringLiteral("未登录"), QStringLiteral("登录账号"), QStringLiteral("扫码登录"),
-    QStringLiteral("登录后继续"), QStringLiteral("登录后使用"), QStringLiteral("登录后畅享"),
+    QStringLiteral("请先登录"),
+    QStringLiteral("请登录"),
+    QStringLiteral("登录后"),
+    QStringLiteral("登录即可"),
+    QStringLiteral("立即登录"),
+    QStringLiteral("未登录"),
+    QStringLiteral("登录账号"),
+    QStringLiteral("扫码登录"),
+    QStringLiteral("登录后继续"),
+    QStringLiteral("登录后使用"),
+    QStringLiteral("登录后畅享"),
     // English
-    QStringLiteral("can't upload"), QStringLiteral("cannot upload"), QStringLiteral("unable to upload"),
-    QStringLiteral("upload failed"), QStringLiteral("failed to upload"),
-    QStringLiteral("image uploads are not"), QStringLiteral("file uploads are not"),
-    QStringLiteral("uploads are not available"), QStringLiteral("not available on the free"),
-    QStringLiteral("plus to upload"), QStringLiteral("pro to upload"),
-    QStringLiteral("upgrade to upload"), QStringLiteral("unsupported file"),
-    QStringLiteral("file too large"), QStringLiteral("image too large"),
-    QStringLiteral("vision is only"), QStringLiteral("only plus can"), QStringLiteral("only pro can"),
-    QStringLiteral("sign in to"), QStringLiteral("log in to"), QStringLiteral("please log in"),
-    QStringLiteral("please sign in"), QStringLiteral("login required"), QStringLiteral("sign in required")};
+    QStringLiteral("can't upload"),
+    QStringLiteral("cannot upload"),
+    QStringLiteral("unable to upload"),
+    QStringLiteral("upload failed"),
+    QStringLiteral("failed to upload"),
+    QStringLiteral("image uploads are not"),
+    QStringLiteral("file uploads are not"),
+    QStringLiteral("uploads are not available"),
+    QStringLiteral("not available on the free"),
+    QStringLiteral("plus to upload"),
+    QStringLiteral("pro to upload"),
+    QStringLiteral("upgrade to upload"),
+    QStringLiteral("unsupported file"),
+    QStringLiteral("file too large"),
+    QStringLiteral("image too large"),
+    QStringLiteral("vision is only"),
+    QStringLiteral("only plus can"),
+    QStringLiteral("only pro can"),
+    QStringLiteral("sign in to"),
+    QStringLiteral("log in to"),
+    QStringLiteral("please log in"),
+    QStringLiteral("please sign in"),
+    QStringLiteral("login required"),
+    QStringLiteral("sign in required")};
 
-QString norm(const QString &s)
-{
+QString norm(const QString& s) {
     return s.trimmed().toLower();
 }
 
-bool containsAny(const QString &text, const QStringList &hints)
-{
-    for (const QString &h : hints) {
+bool containsAny(const QString& text, const QStringList& hints) {
+    for (const QString& h : hints) {
         if (text.contains(h))
             return true;
     }
     return false;
 }
 
-bool looksLikeImageBlock(const QString &name)
-{
+bool looksLikeImageBlock(const QString& name) {
     if (name.isEmpty() || name.size() > 200)
         return false;
     if (!containsAny(name, kImageBlockHints))
         return false;
     // 「上传失败」等稍宽的词：需同时出现图/文件/image/file/upload 语义
-    if (name.contains(QLatin1String("上传失败")) || name.contains(QLatin1String("upload failed"))
-        || name.contains(QLatin1String("failed to upload"))) {
-        return name.contains(QLatin1String("图")) || name.contains(QLatin1String("image"))
-            || name.contains(QLatin1String("file")) || name.contains(QLatin1String("文件"))
-            || name.contains(QLatin1String("png")) || name.contains(QLatin1String("jpg"))
-            || name.contains(QLatin1String("附件")) || name.contains(QLatin1String("attach"));
+    if (name.contains(QLatin1String("上传失败")) || name.contains(QLatin1String("upload failed")) ||
+        name.contains(QLatin1String("failed to upload"))) {
+        return name.contains(QLatin1String("图")) || name.contains(QLatin1String("image")) ||
+               name.contains(QLatin1String("file")) || name.contains(QLatin1String("文件")) ||
+               name.contains(QLatin1String("png")) || name.contains(QLatin1String("jpg")) ||
+               name.contains(QLatin1String("附件")) || name.contains(QLatin1String("attach"));
     }
     return true;
 }
 
-RECT windowRect(HWND hwnd)
-{
+RECT windowRect(HWND hwnd) {
     RECT r{};
     GetWindowRect(hwnd, &r);
     return r;
 }
 
-IUIAutomationTreeWalker *walker()
-{
+IUIAutomationTreeWalker* walker() {
     return platform::UiaCore::instance().controlWalker();
 }
 
 struct ComposerHit {
-    IUIAutomationElement *el = nullptr;
+    IUIAutomationElement* el = nullptr;
     int matched = 1; // 0=matched hint
     LONG bottom = 0;
     bool isDocument = false; // Chromium 桌面端（豆包等）常见 Document 而非 Edit
 };
 
-void walkFindComposer(IUIAutomationElement *el, const RECT &win, LONG contentTop, const QStringList &hints,
-                      int depth, QList<ComposerHit> &hits)
-{
+void walkFindComposer(IUIAutomationElement* el,
+                      const RECT& win,
+                      LONG contentTop,
+                      const QStringList& hints,
+                      int depth,
+                      QList<ComposerHit>& hits) {
     if (!el || depth > 70)
         return;
 
@@ -139,14 +186,15 @@ void walkFindComposer(IUIAutomationElement *el, const RECT &win, LONG contentTop
         const LONG w = br.right - br.left;
         const LONG h = br.bottom - br.top;
         const bool visible = w > 20 && h > 8;
-        const bool notOmni = cls != QLatin1String("OmniboxViewViews") && cls != QLatin1String("urlbar-input");
+        const bool notOmni =
+            cls != QLatin1String("OmniboxViewViews") && cls != QLatin1String("urlbar-input");
         // Document 常覆盖大半窗口：要求贴底且足够宽，避免点到侧栏
         const LONG winH = win.bottom - win.top;
         const LONG winW = win.right - win.left;
-        const bool docOk = !isDoc
-            || (w >= winW * 0.35 && br.bottom >= win.top + static_cast<LONG>(winH * 0.55));
-        if (visible && notOmni && docOk && br.top > contentTop - (isDoc ? 80 : 0)
-            && br.left >= win.left - 2 && br.right <= win.right + 8) {
+        const bool docOk =
+            !isDoc || (w >= winW * 0.35 && br.bottom >= win.top + static_cast<LONG>(winH * 0.55));
+        if (visible && notOmni && docOk && br.top > contentTop - (isDoc ? 80 : 0) &&
+            br.left >= win.left - 2 && br.right <= win.right + 8) {
             const QString text = norm(name + QLatin1Char(' ') + cls);
             // 跳过技能入口文案（「图像生成」等），避免当成输入框
             if (!containsAny(text, kSkillClickAvoid)) {
@@ -162,14 +210,14 @@ void walkFindComposer(IUIAutomationElement *el, const RECT &win, LONG contentTop
         }
     }
 
-    IUIAutomationTreeWalker *w = walker();
+    IUIAutomationTreeWalker* w = walker();
     if (!w)
         return;
-    IUIAutomationElement *child = nullptr;
+    IUIAutomationElement* child = nullptr;
     w->GetFirstChildElement(el, &child);
     while (child) {
         walkFindComposer(child, win, contentTop, hints, depth + 1, hits);
-        IUIAutomationElement *next = nullptr;
+        IUIAutomationElement* next = nullptr;
         w->GetNextSiblingElement(child, &next);
         child->Release();
         child = next;
@@ -177,12 +225,11 @@ void walkFindComposer(IUIAutomationElement *el, const RECT &win, LONG contentTop
 }
 
 struct ComposerPick {
-    IUIAutomationElement *el = nullptr;
+    IUIAutomationElement* el = nullptr;
     bool isDocument = false;
 };
 
-ComposerPick findComposerPick(HWND hwnd, const QString &site)
-{
+ComposerPick findComposerPick(HWND hwnd, const QString& site) {
     ComposerPick pick;
     auto root = platform::UiaCore::instance().elementFromHwnd(hwnd);
     if (!root)
@@ -193,7 +240,7 @@ ComposerPick findComposerPick(HWND hwnd, const QString &site)
     walkFindComposer(root.get(), win, contentTop, SiteCatalog::composerHints(site), 0, hits);
     if (hits.isEmpty())
         return pick;
-    std::sort(hits.begin(), hits.end(), [](const ComposerHit &a, const ComposerHit &b) {
+    std::sort(hits.begin(), hits.end(), [](const ComposerHit& a, const ComposerHit& b) {
         if (a.matched != b.matched)
             return a.matched < b.matched;
         return a.bottom > b.bottom;
@@ -205,25 +252,23 @@ ComposerPick findComposerPick(HWND hwnd, const QString &site)
     return pick;
 }
 
-IUIAutomationElement *findComposerCtrl(HWND hwnd, const QString &site)
-{
+IUIAutomationElement* findComposerCtrl(HWND hwnd, const QString& site) {
     return findComposerPick(hwnd, site).el;
 }
 
-IUIAutomationElement *composerContainer(IUIAutomationElement *composer, HWND hwnd)
-{
+IUIAutomationElement* composerContainer(IUIAutomationElement* composer, HWND hwnd) {
     if (!composer)
         return nullptr;
     const RECT win = windowRect(hwnd);
     const LONG maxH = static_cast<LONG>((win.bottom - win.top) * 0.45);
-    IUIAutomationTreeWalker *w = walker();
+    IUIAutomationTreeWalker* w = walker();
     if (!w)
         return nullptr;
 
-    IUIAutomationElement *container = composer;
+    IUIAutomationElement* container = composer;
     container->AddRef();
     for (int i = 0; i < 12; ++i) {
-        IUIAutomationElement *parent = nullptr;
+        IUIAutomationElement* parent = nullptr;
         w->GetParentElement(container, &parent);
         if (!parent)
             break;
@@ -239,9 +284,14 @@ IUIAutomationElement *composerContainer(IUIAutomationElement *composer, HWND hwn
     return container;
 }
 
-void scanTree(IUIAutomationElement *el, int depth, State &state, LONG &sendBottom, int &removeButtons,
-              int &thumbnails, int maxDepth, bool detectBlocks)
-{
+void scanTree(IUIAutomationElement* el,
+              int depth,
+              State& state,
+              LONG& sendBottom,
+              int& removeButtons,
+              int& thumbnails,
+              int maxDepth,
+              bool detectBlocks) {
     if (!el || depth > maxDepth)
         return;
 
@@ -255,8 +305,9 @@ void scanTree(IUIAutomationElement *el, int depth, State &state, LONG &sendBotto
         BSTR helpB = nullptr;
         el->get_CurrentName(&nameB);
         el->get_CurrentHelpText(&helpB);
-        QString name = norm((nameB ? QString::fromWCharArray(nameB) : QString()) + QLatin1Char(' ')
-                            + (helpB ? QString::fromWCharArray(helpB) : QString()));
+        QString name =
+            norm((nameB ? QString::fromWCharArray(nameB) : QString()) + QLatin1Char(' ') +
+                 (helpB ? QString::fromWCharArray(helpB) : QString()));
         if (nameB)
             SysFreeString(nameB);
         if (helpB)
@@ -268,47 +319,48 @@ void scanTree(IUIAutomationElement *el, int depth, State &state, LONG &sendBotto
         if (detectBlocks && looksLikeImageBlock(name))
             state.imageBlocked = true;
 
-        if (ctype == UIA_ProgressBarControlTypeId
-            || (name.size() <= 40 && containsAny(name, kUploadingHints))) {
+        if (ctype == UIA_ProgressBarControlTypeId ||
+            (name.size() <= 40 && containsAny(name, kUploadingHints))) {
             state.uploading = true;
         }
         if (ctype == UIA_ButtonControlTypeId && containsAny(name, kRemoveHints))
             removeButtons++;
-        if (ctype == UIA_ImageControlTypeId && (br.right - br.left) >= 24 && (br.bottom - br.top) >= 24)
+        if (ctype == UIA_ImageControlTypeId && (br.right - br.left) >= 24 &&
+            (br.bottom - br.top) >= 24)
             thumbnails++;
-        if (ctype == UIA_ButtonControlTypeId && name.size() <= 40 && containsAny(name, kSendHints)
-            && br.bottom > sendBottom) {
+        if (ctype == UIA_ButtonControlTypeId && name.size() <= 40 &&
+            containsAny(name, kSendHints) && br.bottom > sendBottom) {
             sendBottom = br.bottom;
             state.sendFound = true;
             state.sendEnabled = enabled;
         }
     }
 
-    IUIAutomationTreeWalker *w = walker();
+    IUIAutomationTreeWalker* w = walker();
     if (!w)
         return;
-    IUIAutomationElement *child = nullptr;
+    IUIAutomationElement* child = nullptr;
     w->GetFirstChildElement(el, &child);
     while (child) {
-        scanTree(child, depth + 1, state, sendBottom, removeButtons, thumbnails, maxDepth, detectBlocks);
-        IUIAutomationElement *next = nullptr;
+        scanTree(
+            child, depth + 1, state, sendBottom, removeButtons, thumbnails, maxDepth, detectBlocks);
+        IUIAutomationElement* next = nullptr;
         w->GetNextSiblingElement(child, &next);
         child->Release();
         child = next;
     }
 }
 
-bool trySetFocus(IUIAutomationElement *el)
-{
+bool trySetFocus(IUIAutomationElement* el) {
     if (!el)
         return false;
     if (SUCCEEDED(el->SetFocus()))
         return true;
-    IUIAutomationLegacyIAccessiblePattern *leg = nullptr;
+    IUIAutomationLegacyIAccessiblePattern* leg = nullptr;
     if (SUCCEEDED(el->GetCurrentPatternAs(UIA_LegacyIAccessiblePatternId,
                                           IID_IUIAutomationLegacyIAccessiblePattern,
-                                          reinterpret_cast<void **>(&leg)))
-        && leg) {
+                                          reinterpret_cast<void**>(&leg))) &&
+        leg) {
         // accSelect SELFLAG_TAKEFOCUS = 1
         const HRESULT hr = leg->Select(0x1);
         leg->Release();
@@ -319,19 +371,17 @@ bool trySetFocus(IUIAutomationElement *el)
 }
 
 /** 必须点坐标时：静默消息点击，指针不移动 */
-void clickPoint(int x, int y)
-{
+void clickPoint(int x, int y) {
     WinInput::clickScreen(x, y, false);
 }
 
-QString readEditValue(IUIAutomationElement *el)
-{
+QString readEditValue(IUIAutomationElement* el) {
     if (!el)
         return {};
-    IUIAutomationValuePattern *pat = nullptr;
-    if (FAILED(el->GetCurrentPatternAs(UIA_ValuePatternId, IID_IUIAutomationValuePattern,
-                                       reinterpret_cast<void **>(&pat)))
-        || !pat)
+    IUIAutomationValuePattern* pat = nullptr;
+    if (FAILED(el->GetCurrentPatternAs(
+            UIA_ValuePatternId, IID_IUIAutomationValuePattern, reinterpret_cast<void**>(&pat))) ||
+        !pat)
         return {};
     BSTR val = nullptr;
     pat->get_CurrentValue(&val);
@@ -342,18 +392,17 @@ QString readEditValue(IUIAutomationElement *el)
     return s;
 }
 
-void invokeRemoveButtons(IUIAutomationElement *container)
-{
+void invokeRemoveButtons(IUIAutomationElement* container) {
     if (!container)
         return;
     // 简化：扫描并 Invoke 移除按钮
     struct Item {
-        IUIAutomationElement *el;
+        IUIAutomationElement* el;
     };
     QList<Item> buttons;
 
-    std::function<void(IUIAutomationElement *, int)> walk;
-    walk = [&](IUIAutomationElement *el, int depth) {
+    std::function<void(IUIAutomationElement*, int)> walk;
+    walk = [&](IUIAutomationElement* el, int depth) {
         if (!el || depth > 30)
             return;
         CONTROLTYPEID ctype = 0;
@@ -369,14 +418,14 @@ void invokeRemoveButtons(IUIAutomationElement *container)
                 buttons.push_back({el});
             }
         }
-        IUIAutomationTreeWalker *w = walker();
+        IUIAutomationTreeWalker* w = walker();
         if (!w)
             return;
-        IUIAutomationElement *child = nullptr;
+        IUIAutomationElement* child = nullptr;
         w->GetFirstChildElement(el, &child);
         while (child) {
             walk(child, depth + 1);
-            IUIAutomationElement *next = nullptr;
+            IUIAutomationElement* next = nullptr;
             w->GetNextSiblingElement(child, &next);
             child->Release();
             child = next;
@@ -384,11 +433,12 @@ void invokeRemoveButtons(IUIAutomationElement *container)
     };
     walk(container, 0);
 
-    for (Item &it : buttons) {
-        IUIAutomationInvokePattern *inv = nullptr;
-        if (SUCCEEDED(it.el->GetCurrentPatternAs(UIA_InvokePatternId, IID_IUIAutomationInvokePattern,
-                                                 reinterpret_cast<void **>(&inv)))
-            && inv) {
+    for (Item& it : buttons) {
+        IUIAutomationInvokePattern* inv = nullptr;
+        if (SUCCEEDED(it.el->GetCurrentPatternAs(UIA_InvokePatternId,
+                                                 IID_IUIAutomationInvokePattern,
+                                                 reinterpret_cast<void**>(&inv))) &&
+            inv) {
             inv->Invoke();
             inv->Release();
         }
@@ -399,8 +449,7 @@ void invokeRemoveButtons(IUIAutomationElement *container)
 
 } // namespace
 
-void enableWebAccessibility(HWND hwnd)
-{
+void enableWebAccessibility(HWND hwnd) {
     if (!platform::windowAlive(hwnd))
         return;
     // 短缓存：同一窗口 2s 内不重复 EnumChild + AccessibleObjectFromWindow
@@ -416,12 +465,14 @@ void enableWebAccessibility(HWND hwnd)
     EnumChildWindows(
         hwnd,
         [](HWND child, LPARAM lp) -> BOOL {
-            auto *list = reinterpret_cast<QList<HWND> *>(lp);
+            // Win32 EnumWindows 回调经 LPARAM 传容器指针，为系统约定用法
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto* list = reinterpret_cast<QList<HWND>*>(lp);
             wchar_t cls[128]{};
             GetClassNameW(child, cls, 128);
             const QString c = QString::fromWCharArray(cls);
-            if (c == QLatin1String("Chrome_RenderWidgetHostHWND")
-                || c == QLatin1String("MozillaWindowClass"))
+            if (c == QLatin1String("Chrome_RenderWidgetHostHWND") ||
+                c == QLatin1String("MozillaWindowClass"))
                 list->push_back(child);
             return TRUE;
         },
@@ -430,16 +481,17 @@ void enableWebAccessibility(HWND hwnd)
 
     const IID iidAcc = IID_IAccessible;
     for (HWND t : targets) {
-        IAccessible *acc = nullptr;
-        if (AccessibleObjectFromWindow(t, OBJID_CLIENT, iidAcc, reinterpret_cast<void **>(&acc)) == S_OK
-            && acc) {
+        IAccessible* acc = nullptr;
+        if (AccessibleObjectFromWindow(
+                t, static_cast<DWORD>(OBJID_CLIENT), iidAcc, reinterpret_cast<void**>(&acc)) ==
+                S_OK &&
+            acc) {
             acc->Release();
         }
     }
 }
 
-bool focusComposer(HWND hwnd, const QString &site)
-{
+bool focusComposer(HWND hwnd, const QString& site) {
     enableWebAccessibility(hwnd);
     WinInput::setForeground(hwnd);
 
@@ -502,14 +554,13 @@ bool focusComposer(HWND hwnd, const QString &site)
     return clickClientComposer();
 }
 
-State scan(HWND hwnd, const QString &site)
-{
+State scan(HWND hwnd, const QString& site) {
     State state;
     enableWebAccessibility(hwnd);
-    IUIAutomationElement *composer = findComposerCtrl(hwnd, site);
+    IUIAutomationElement* composer = findComposerCtrl(hwnd, site);
     if (!composer)
         return state;
-    IUIAutomationElement *container = composerContainer(composer, hwnd);
+    IUIAutomationElement* container = composerContainer(composer, hwnd);
     composer->Release();
     if (!container)
         return state;
@@ -524,8 +575,7 @@ State scan(HWND hwnd, const QString &site)
     return state;
 }
 
-State probeWindow(HWND hwnd)
-{
+State probeWindow(HWND hwnd) {
     State state;
     enableWebAccessibility(hwnd);
     auto root = platform::UiaCore::instance().elementFromHwnd(hwnd);
@@ -541,10 +591,9 @@ State probeWindow(HWND hwnd)
     return state;
 }
 
-bool waitAttachmentAdded(HWND hwnd, const QString &site, int before, int timeoutMs)
-{
-    const qint64 deadline = GetTickCount64() + timeoutMs;
-    while (static_cast<qint64>(GetTickCount64()) < deadline) {
+bool waitAttachmentAdded(HWND hwnd, const QString& site, int before, int timeoutMs) {
+    const ULONGLONG deadline = GetTickCount64() + static_cast<ULONGLONG>(timeoutMs);
+    while (GetTickCount64() < deadline) {
         if (!platform::windowAlive(hwnd))
             return false;
         WinInput::sleepMs(400);
@@ -565,15 +614,17 @@ bool waitAttachmentAdded(HWND hwnd, const QString &site, int before, int timeout
     return false;
 }
 
-ImagePasteResult waitImagePasteResult(HWND hwnd, const QString &site, int beforeAttachments, int timeoutMs)
-{
+ImagePasteResult waitImagePasteResult(HWND hwnd,
+                                      const QString& site,
+                                      int beforeAttachments,
+                                      int timeoutMs) {
     Q_UNUSED(site);
     if (!platform::windowAlive(hwnd))
         return ImagePasteResult::WindowGone;
 
-    const qint64 deadline = GetTickCount64() + qMax(2000, timeoutMs);
+    const ULONGLONG deadline = GetTickCount64() + static_cast<ULONGLONG>(qMax(2000, timeoutMs));
     bool sawUpload = false;
-    while (static_cast<qint64>(GetTickCount64()) < deadline) {
+    while (GetTickCount64() < deadline) {
         if (!platform::windowAlive(hwnd))
             return ImagePasteResult::WindowGone;
         WinInput::sleepMs(350);
@@ -590,8 +641,7 @@ ImagePasteResult waitImagePasteResult(HWND hwnd, const QString &site, int before
         if (att > beforeAttachments)
             return ImagePasteResult::Ok;
         // 出现过上传中且已结束、附件仍未增加：可能被拒
-        if (sawUpload && !st.uploading && !win.uploading
-            && static_cast<qint64>(GetTickCount64()) + 800 >= deadline) {
+        if (sawUpload && !st.uploading && !win.uploading && GetTickCount64() + 800 >= deadline) {
             break;
         }
     }
@@ -607,19 +657,18 @@ ImagePasteResult waitImagePasteResult(HWND hwnd, const QString &site, int before
     return ImagePasteResult::Failed;
 }
 
-bool waitUntilUploaded(HWND hwnd, const QString &site, int minWaitMs, int maxWaitMs)
-{
+bool waitUntilUploaded(HWND hwnd, const QString& site, int minWaitMs, int maxWaitMs) {
     qDebug() << "UIA wait upload min=" << minWaitMs << "max=" << maxWaitMs;
     if (!platform::windowAlive(hwnd))
         return false;
-    const qint64 start = GetTickCount64();
+    const ULONGLONG start = GetTickCount64();
     WinInput::sleepMs(800);
     if (!platform::windowAlive(hwnd))
         return false;
-    const qint64 deadline = start + qMax(10000, maxWaitMs);
+    const ULONGLONG deadline = start + static_cast<ULONGLONG>(qMax(10000, maxWaitMs));
     int readyStreak = 0;
 
-    while (static_cast<qint64>(GetTickCount64()) < deadline) {
+    while (GetTickCount64() < deadline) {
         if (!platform::windowAlive(hwnd)) {
             qDebug() << "UIA upload wait aborted: window closed";
             return false;
@@ -648,10 +697,9 @@ bool waitUntilUploaded(HWND hwnd, const QString &site, int minWaitMs, int maxWai
     return false;
 }
 
-bool messageSent(HWND hwnd, const QString &site, const QString &prompt)
-{
+bool messageSent(HWND hwnd, const QString& site, const QString& prompt) {
     enableWebAccessibility(hwnd);
-    IUIAutomationElement *ctrl = findComposerCtrl(hwnd, site);
+    IUIAutomationElement* ctrl = findComposerCtrl(hwnd, site);
     if (ctrl) {
         const QString text = readEditValue(ctrl);
         ctrl->Release();
@@ -666,16 +714,15 @@ bool messageSent(HWND hwnd, const QString &site, const QString &prompt)
     return !(st.sendFound && st.sendEnabled);
 }
 
-void clearComposer(HWND hwnd, const QString &site)
-{
+void clearComposer(HWND hwnd, const QString& site) {
     enableWebAccessibility(hwnd);
     if (SiteCatalog::needsSimplePaste(site)) {
         focusComposer(hwnd, site);
         return;
     }
-    IUIAutomationElement *composer = findComposerCtrl(hwnd, site);
+    IUIAutomationElement* composer = findComposerCtrl(hwnd, site);
     if (composer) {
-        IUIAutomationElement *container = composerContainer(composer, hwnd);
+        IUIAutomationElement* container = composerContainer(composer, hwnd);
         composer->Release();
         if (container) {
             invokeRemoveButtons(container);

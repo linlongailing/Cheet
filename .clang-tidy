@@ -1,0 +1,20 @@
+﻿# Cheet 代码静态检查配置（clang-tidy）。侧重查 bug 与现代 C++ 用法，不做风格纠偏
+# （风格由 .clang-format 负责）。本地运行参考：
+#   clang-tidy -p build_release src/ai/AiSender.cpp
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  performance-*,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-default-member-init,
+  modernize-use-emplace,
+  readability-redundant-member-init,
+  readability-container-size-empty,
+  cppcoreguidelines-init-variables,
+  misc-redundant-expression,
+  misc-unused-using-decls
+WarningsAsErrors: ''
+HeaderFilterRegex: 'src/.*'
+FormatStyle: file

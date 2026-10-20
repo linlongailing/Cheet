@@ -1,32 +1,31 @@
 #include "capture/CaptureController.h"
 
-#include "capture/ClipboardImage.h"
 #include "capture/CaptureOverlay.h"
+#include "capture/ClipboardImage.h"
 
 #include <QGuiApplication>
 #include <QPainter>
 #include <QScreen>
 
-CaptureController::CaptureController(QObject *parent)
-    : QObject(parent)
-{
-}
+CaptureController::CaptureController(QObject* parent) : QObject(parent) {}
 
-void CaptureController::setSettings(const Settings &settings)
-{
+void CaptureController::setSettings(const Settings& settings) {
     m_settings = settings;
 }
 
-void CaptureController::startCapture()
-{
+void CaptureController::startCapture() {
     if (m_overlay)
         return;
 
     QRect geo;
     qreal dpr = 1.0;
-    for (QScreen *screen : QGuiApplication::screens()) {
+    for (QScreen* screen : QGuiApplication::screens()) {
         geo = geo.united(screen->geometry());
         dpr = qMax(dpr, screen->devicePixelRatio());
+    }
+    if (geo.isEmpty()) {
+        emit captureFinished(false);
+        return;
     }
 
     // 按物理像素拼接，并设置 devicePixelRatio，避免 125%/150%/200% 缩成糊图
@@ -37,7 +36,7 @@ void CaptureController::startCapture()
     {
         QPainter p(&shot);
         p.setRenderHint(QPainter::SmoothPixmapTransform, false);
-        for (QScreen *screen : QGuiApplication::screens()) {
+        for (QScreen* screen : QGuiApplication::screens()) {
             QPixmap part = screen->grabWindow(0);
             if (part.isNull())
                 continue;
@@ -54,7 +53,7 @@ void CaptureController::startCapture()
 
     const bool fixed = m_settings.selectMode == QLatin1String("fixed");
     m_overlay = new CaptureOverlay(shot, fixed, m_settings.fixedWidth, m_settings.fixedHeight);
-    connect(m_overlay, &CaptureOverlay::finished, this, [this](const QPixmap &image, bool sendAi) {
+    connect(m_overlay, &CaptureOverlay::finished, this, [this](const QPixmap& image, bool sendAi) {
         onOverlayFinished(image, sendAi);
     });
     connect(m_overlay, &CaptureOverlay::cancelled, this, [this]() {
@@ -69,8 +68,7 @@ void CaptureController::startCapture()
     m_overlay->raise();
 }
 
-void CaptureController::onOverlayFinished(const QPixmap &image, bool sendAi)
-{
+void CaptureController::onOverlayFinished(const QPixmap& image, bool sendAi) {
     if (m_overlay) {
         m_overlay->deleteLater();
         m_overlay = nullptr;

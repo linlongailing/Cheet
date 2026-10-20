@@ -9,22 +9,20 @@
 #include <windows.h>
 #endif
 
-HotkeyManager::HotkeyManager(QObject *parent)
-    : QObject(parent)
-{
-    if (auto *dispatcher = QAbstractEventDispatcher::instance())
+HotkeyManager::HotkeyManager(QObject* parent) : QObject(parent) {
+    if (auto* dispatcher = QAbstractEventDispatcher::instance())
         dispatcher->installNativeEventFilter(this);
 }
 
-HotkeyManager::~HotkeyManager()
-{
+HotkeyManager::~HotkeyManager() {
     unregisterHotkey();
-    if (auto *dispatcher = QAbstractEventDispatcher::instance())
+    if (auto* dispatcher = QAbstractEventDispatcher::instance())
         dispatcher->removeNativeEventFilter(this);
 }
 
-bool HotkeyManager::parseHotkey(const QString &hotkey, unsigned int &modifiers, unsigned int &vk) const
-{
+bool HotkeyManager::parseHotkey(const QString& hotkey,
+                                unsigned int& modifiers,
+                                unsigned int& vk) const {
 #ifdef Q_OS_WIN
     modifiers = 0;
     vk = 0;
@@ -47,9 +45,8 @@ bool HotkeyManager::parseHotkey(const QString &hotkey, unsigned int &modifiers, 
         return false;
     if (key.size() == 1) {
         const QChar c = key.at(0).toUpper();
-        if (c >= QLatin1Char('A') && c <= QLatin1Char('Z'))
-            vk = static_cast<UINT>(c.unicode());
-        else if (c >= QLatin1Char('0') && c <= QLatin1Char('9'))
+        if ((c >= QLatin1Char('A') && c <= QLatin1Char('Z')) ||
+            (c >= QLatin1Char('0') && c <= QLatin1Char('9')))
             vk = static_cast<UINT>(c.unicode());
     } else if (key.startsWith(QLatin1String("f")) && key.size() <= 3) {
         bool ok = false;
@@ -66,8 +63,7 @@ bool HotkeyManager::parseHotkey(const QString &hotkey, unsigned int &modifiers, 
 #endif
 }
 
-bool HotkeyManager::registerHotkey(const QString &hotkey)
-{
+bool HotkeyManager::registerHotkey(const QString& hotkey) {
     unregisterHotkey();
 #ifdef Q_OS_WIN
     unsigned int modifiers = 0;
@@ -85,8 +81,7 @@ bool HotkeyManager::registerHotkey(const QString &hotkey)
 #endif
 }
 
-void HotkeyManager::unregisterHotkey()
-{
+void HotkeyManager::unregisterHotkey() {
 #ifdef Q_OS_WIN
     if (m_registered) {
         UnregisterHotKey(nullptr, m_id);
@@ -95,12 +90,11 @@ void HotkeyManager::unregisterHotkey()
 #endif
 }
 
-bool HotkeyManager::nativeEventFilter(const QByteArray &eventType, void *message, qintptr *result)
-{
+bool HotkeyManager::nativeEventFilter(const QByteArray& eventType, void* message, qintptr* result) {
     Q_UNUSED(result);
 #ifdef Q_OS_WIN
     if (eventType == "windows_generic_MSG" || eventType == "windows_dispatcher_MSG") {
-        const MSG *msg = static_cast<MSG *>(message);
+        const MSG* msg = static_cast<MSG*>(message);
         if (msg && msg->message == WM_HOTKEY && static_cast<int>(msg->wParam) == m_id) {
             emit activated();
             return false;

@@ -4,8 +4,7 @@
 #include <QString>
 
 /** 应用设置（%LOCALAPPDATA%/Cheet/settings.json）。 */
-class Settings
-{
+class Settings {
 public:
     QString selectMode = QStringLiteral("free");
     int fixedWidth = 800;
@@ -33,5 +32,5 @@ public:
     QString targetUrl() const;
 
     QJsonObject toJson() const;
-    static Settings fromJson(const QJsonObject &obj);
+    static Settings fromJson(const QJsonObject& obj);
 };

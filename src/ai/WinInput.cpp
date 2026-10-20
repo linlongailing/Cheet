@@ -31,8 +31,7 @@ struct ForegroundInputScope {
     DWORD selfTid = 0;
     bool attached = false;
 
-    explicit ForegroundInputScope(HWND preferHwnd = nullptr)
-    {
+    explicit ForegroundInputScope(HWND preferHwnd = nullptr) {
         selfTid = GetCurrentThreadId();
         HWND fg = preferHwnd && IsWindow(preferHwnd) ? preferHwnd : GetForegroundWindow();
         if (!fg)
@@ -42,8 +41,7 @@ struct ForegroundInputScope {
             attached = AttachThreadInput(selfTid, foreTid, TRUE) != FALSE;
     }
 
-    ~ForegroundInputScope()
-    {
+    ~ForegroundInputScope() {
         if (attached)
             AttachThreadInput(selfTid, foreTid, FALSE);
     }
@@ -51,13 +49,11 @@ struct ForegroundInputScope {
 
 } // namespace
 
-void sleepMs(int ms)
-{
+void sleepMs(int ms) {
     QThread::msleep(static_cast<unsigned long>(ms));
 }
 
-bool setForeground(HWND hwnd)
-{
+bool setForeground(HWND hwnd) {
     if (!hwnd || !IsWindow(hwnd))
         return false;
     if (IsIconic(hwnd))
@@ -88,8 +84,7 @@ bool setForeground(HWND hwnd)
     return GetForegroundWindow() == hwnd || IsWindow(hwnd);
 }
 
-static void sendVk(WORD vk, bool up)
-{
+static void sendVk(WORD vk, bool up) {
     INPUT in{};
     in.type = INPUT_KEYBOARD;
     in.ki.wVk = vk;
@@ -97,8 +92,7 @@ static void sendVk(WORD vk, bool up)
     SendInput(1, &in, sizeof(INPUT));
 }
 
-void sendCtrlKey(WORD vk)
-{
+void sendCtrlKey(WORD vk) {
     ForegroundInputScope scope;
     sendVk(VK_CONTROL, false);
     sleepMs(20);
@@ -110,8 +104,7 @@ void sendCtrlKey(WORD vk)
     sleepMs(40);
 }
 
-void sendCtrlShiftKey(WORD vk)
-{
+void sendCtrlShiftKey(WORD vk) {
     ForegroundInputScope scope;
     sendVk(VK_CONTROL, false);
     sendVk(VK_SHIFT, false);
@@ -125,8 +118,7 @@ void sendCtrlShiftKey(WORD vk)
     sleepMs(40);
 }
 
-void sendKey(WORD vk)
-{
+void sendKey(WORD vk) {
     ForegroundInputScope scope;
     sendVk(vk, false);
     sleepMs(20);
@@ -134,13 +126,11 @@ void sendKey(WORD vk)
     sleepMs(40);
 }
 
-void sendEnter()
-{
+void sendEnter() {
     sendKey(VK_RETURN);
 }
 
-void clickScreen(int x, int y, bool moveCursor)
-{
+void clickScreen(int x, int y, bool moveCursor) {
     POINT screen{x, y};
 
     if (!moveCursor) {
@@ -187,8 +177,7 @@ void clickScreen(int x, int y, bool moveCursor)
     SetCursorPos(saved.x, saved.y);
 }
 
-void sendText(const QString &text)
-{
+void sendText(const QString& text) {
     ForegroundInputScope scope;
     for (const QChar ch : text) {
         INPUT in[2]{};
@@ -209,22 +198,19 @@ struct EnumCtx {
     LONG bestArea = 0;
 };
 
-static QString windowTitle(HWND hwnd)
-{
+static QString windowTitle(HWND hwnd) {
     wchar_t buf[512]{};
     GetWindowTextW(hwnd, buf, 512);
     return QString::fromWCharArray(buf);
 }
 
-static QString className(HWND hwnd)
-{
+static QString className(HWND hwnd) {
     wchar_t buf[256]{};
     GetClassNameW(hwnd, buf, 256);
     return QString::fromWCharArray(buf);
 }
 
-static QString processName(HWND hwnd)
-{
+static QString processName(HWND hwnd) {
     DWORD pid = 0;
     GetWindowThreadProcessId(hwnd, &pid);
     HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
@@ -239,14 +225,14 @@ static QString processName(HWND hwnd)
     return name;
 }
 
-static bool isTopLevelVisible(HWND hwnd)
-{
+static bool isTopLevelVisible(HWND hwnd) {
     return IsWindowVisible(hwnd) && !GetWindow(hwnd, GW_OWNER);
 }
 
-static BOOL CALLBACK enumBrowserProc(HWND hwnd, LPARAM lParam)
-{
-    auto *ctx = reinterpret_cast<EnumCtx *>(lParam);
+static BOOL CALLBACK enumBrowserProc(HWND hwnd, LPARAM lParam) {
+    // Win32 EnumWindows 回调经 LPARAM 传上下文指针，为系统约定用法
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto* ctx = reinterpret_cast<EnumCtx*>(lParam);
     if (!isTopLevelVisible(hwnd))
         return TRUE;
     const QString title = windowTitle(hwnd).toLower();
@@ -256,8 +242,8 @@ static BOOL CALLBACK enumBrowserProc(HWND hwnd, LPARAM lParam)
         return TRUE;
 
     if (ctx->browser == QLatin1String("firefox")) {
-        if (cls == QLatin1String("MozillaWindowClass")
-            && (title.contains(QLatin1String("firefox")) || exe == QLatin1String("firefox.exe"))) {
+        if (cls == QLatin1String("MozillaWindowClass") &&
+            (title.contains(QLatin1String("firefox")) || exe == QLatin1String("firefox.exe"))) {
             ctx->found = hwnd;
             return FALSE;
         }
@@ -275,7 +261,8 @@ static BOOL CALLBACK enumBrowserProc(HWND hwnd, LPARAM lParam)
             return FALSE;
         }
     } else { // edge
-        if (title.contains(QLatin1String("google chrome")) || title.contains(QLatin1String("brave")))
+        if (title.contains(QLatin1String("google chrome")) ||
+            title.contains(QLatin1String("brave")))
             return TRUE;
         if (title.contains(QLatin1String("edge")) || exe == QLatin1String("msedge.exe")) {
             ctx->found = hwnd;
@@ -285,23 +272,20 @@ static BOOL CALLBACK enumBrowserProc(HWND hwnd, LPARAM lParam)
     return TRUE;
 }
 
-HWND findBrowserWindow(const QString &browser)
-{
+HWND findBrowserWindow(const QString& browser) {
     EnumCtx ctx;
     ctx.browser = browser.toLower();
     EnumWindows(enumBrowserProc, reinterpret_cast<LPARAM>(&ctx));
     return ctx.found;
 }
 
-static bool isBrowserExe(const QString &exe)
-{
-    return exe == QLatin1String("msedge.exe") || exe == QLatin1String("chrome.exe")
-        || exe == QLatin1String("firefox.exe") || exe == QLatin1String("brave.exe")
-        || exe == QLatin1String("msedgewebview2.exe");
+static bool isBrowserExe(const QString& exe) {
+    return exe == QLatin1String("msedge.exe") || exe == QLatin1String("chrome.exe") ||
+           exe == QLatin1String("firefox.exe") || exe == QLatin1String("brave.exe") ||
+           exe == QLatin1String("msedgewebview2.exe");
 }
 
-static bool matchesDesktopWindow(const QString &titleRaw, const QString &exe, const QString &site)
-{
+static bool matchesDesktopWindow(const QString& titleRaw, const QString& exe, const QString& site) {
     const QString title = QString(titleRaw).remove(QChar(0x200b)).trimmed().toLower();
     if (isBrowserExe(exe))
         return false;
@@ -310,16 +294,17 @@ static bool matchesDesktopWindow(const QString &titleRaw, const QString &exe, co
         return true;
     if (title.isEmpty())
         return false;
-    for (const QString &h : SiteCatalog::desktopTitleHints(site)) {
+    for (const QString& h : SiteCatalog::desktopTitleHints(site)) {
         if (title.contains(h))
             return true;
     }
     return false;
 }
 
-static BOOL CALLBACK enumDesktopProc(HWND hwnd, LPARAM lParam)
-{
-    auto *ctx = reinterpret_cast<EnumCtx *>(lParam);
+static BOOL CALLBACK enumDesktopProc(HWND hwnd, LPARAM lParam) {
+    // Win32 EnumWindows 回调经 LPARAM 传上下文指针，为系统约定用法
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto* ctx = reinterpret_cast<EnumCtx*>(lParam);
     if (!isTopLevelVisible(hwnd))
         return TRUE;
     const QString title = windowTitle(hwnd);
@@ -344,8 +329,7 @@ static BOOL CALLBACK enumDesktopProc(HWND hwnd, LPARAM lParam)
     return TRUE;
 }
 
-HWND findDesktopWindow(const QString &site)
-{
+HWND findDesktopWindow(const QString& site) {
     EnumCtx ctx;
     ctx.site = site.toLower();
     EnumWindows(enumDesktopProc, reinterpret_cast<LPARAM>(&ctx));
@@ -362,19 +346,20 @@ HWND findDesktopWindow(const QString &site)
     return ctx.found;
 }
 
-static QString localAppData()
-{
-    const QString env = qEnvironmentVariable("LOCALAPPDATA");
+static QString localAppData() {
+    QString env = qEnvironmentVariable("LOCALAPPDATA");
     if (!env.isEmpty())
         return env;
     return QDir::homePath() + QStringLiteral("/AppData/Local");
 }
 
-static QString fromAppPaths(const QString &exeName)
-{
-    for (const QString &hive : {QStringLiteral("HKEY_CURRENT_USER"), QStringLiteral("HKEY_LOCAL_MACHINE")}) {
-        QSettings reg(hive + QStringLiteral("\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\") + exeName,
-                      QSettings::NativeFormat);
+static QString fromAppPaths(const QString& exeName) {
+    for (const QString& hive :
+         {QStringLiteral("HKEY_CURRENT_USER"), QStringLiteral("HKEY_LOCAL_MACHINE")}) {
+        QSettings reg(
+            hive + QStringLiteral("\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\") +
+                exeName,
+            QSettings::NativeFormat);
         QString path = reg.value(QStringLiteral(".")).toString().trimmed();
         if (path.startsWith(QLatin1Char('"')) && path.endsWith(QLatin1Char('"')))
             path = path.mid(1, path.size() - 2);
@@ -385,25 +370,23 @@ static QString fromAppPaths(const QString &exeName)
     return {};
 }
 
-QString findBrowserExe(const QString &browser)
-{
-    const QString exeName = browser == QLatin1String("chrome")   ? QStringLiteral("chrome.exe")
+QString findBrowserExe(const QString& browser) {
+    const QString exeName = browser == QLatin1String("chrome")    ? QStringLiteral("chrome.exe")
                             : browser == QLatin1String("firefox") ? QStringLiteral("firefox.exe")
                                                                   : QStringLiteral("msedge.exe");
     return fromAppPaths(exeName);
 }
 
-static QString exeFromCommandString(const QString &cmd)
-{
+static QString exeFromCommandString(const QString& cmd) {
     QString s = cmd.trimmed();
     if (s.isEmpty())
         return {};
     if (s.startsWith(QLatin1Char('"'))) {
-        const int end = s.indexOf(QLatin1Char('"'), 1);
+        const qsizetype end = s.indexOf(QLatin1Char('"'), 1);
         if (end > 1)
             s = s.mid(1, end - 1);
     } else {
-        const int sp = s.indexOf(QLatin1Char(' '));
+        const qsizetype sp = s.indexOf(QLatin1Char(' '));
         if (sp > 0)
             s = s.left(sp);
     }
@@ -411,12 +394,12 @@ static QString exeFromCommandString(const QString &cmd)
     return QFileInfo::exists(s) ? s : QString();
 }
 
-static QString fromProtocolCommand(const QStringList &schemes)
-{
-    for (const QString &scheme : schemes) {
-        for (const QString &hive : {QStringLiteral("HKEY_CURRENT_USER"), QStringLiteral("HKEY_LOCAL_MACHINE")}) {
-            QSettings reg(hive + QStringLiteral("\\Software\\Classes\\") + scheme
-                              + QStringLiteral("\\shell\\open\\command"),
+static QString fromProtocolCommand(const QStringList& schemes) {
+    for (const QString& scheme : schemes) {
+        for (const QString& hive :
+             {QStringLiteral("HKEY_CURRENT_USER"), QStringLiteral("HKEY_LOCAL_MACHINE")}) {
+            QSettings reg(hive + QStringLiteral("\\Software\\Classes\\") + scheme +
+                              QStringLiteral("\\shell\\open\\command"),
                           QSettings::NativeFormat);
             const QString path = exeFromCommandString(reg.value(QStringLiteral(".")).toString());
             if (!path.isEmpty())
@@ -426,16 +409,18 @@ static QString fromProtocolCommand(const QStringList &schemes)
     return {};
 }
 
-static QString resolveShortcutTarget(const QString &lnkPath)
-{
+static QString resolveShortcutTarget(const QString& lnkPath) {
     const HRESULT hrInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    IShellLinkW *sl = nullptr;
+    IShellLinkW* sl = nullptr;
     QString target;
-    if (SUCCEEDED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_IShellLinkW,
-                                    reinterpret_cast<void **>(&sl)))
-        && sl) {
-        IPersistFile *pf = nullptr;
-        if (SUCCEEDED(sl->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&pf))) && pf) {
+    if (SUCCEEDED(CoCreateInstance(CLSID_ShellLink,
+                                   nullptr,
+                                   CLSCTX_INPROC_SERVER,
+                                   IID_IShellLinkW,
+                                   reinterpret_cast<void**>(&sl))) &&
+        sl) {
+        IPersistFile* pf = nullptr;
+        if (SUCCEEDED(sl->QueryInterface(IID_IPersistFile, reinterpret_cast<void**>(&pf))) && pf) {
             if (SUCCEEDED(pf->Load(reinterpret_cast<LPCWSTR>(lnkPath.utf16()), STGM_READ))) {
                 wchar_t buf[MAX_PATH]{};
                 if (SUCCEEDED(sl->GetPath(buf, MAX_PATH, nullptr, SLGP_UNCPRIORITY)))
@@ -451,15 +436,17 @@ static QString resolveShortcutTarget(const QString &lnkPath)
     return QFileInfo::exists(target) ? target : QString();
 }
 
-static bool protocolRegistered(const QStringList &schemes)
-{
-    for (const QString &scheme : schemes) {
-        for (const QString &hive : {QStringLiteral("HKEY_CURRENT_USER"), QStringLiteral("HKEY_LOCAL_MACHINE")}) {
-            QSettings reg(hive + QStringLiteral("\\Software\\Classes\\") + scheme, QSettings::NativeFormat);
-            if (!reg.childGroups().isEmpty() || !reg.value(QStringLiteral(".")).toString().isEmpty())
+static bool protocolRegistered(const QStringList& schemes) {
+    for (const QString& scheme : schemes) {
+        for (const QString& hive :
+             {QStringLiteral("HKEY_CURRENT_USER"), QStringLiteral("HKEY_LOCAL_MACHINE")}) {
+            QSettings reg(hive + QStringLiteral("\\Software\\Classes\\") + scheme,
+                          QSettings::NativeFormat);
+            if (!reg.childGroups().isEmpty() ||
+                !reg.value(QStringLiteral(".")).toString().isEmpty())
                 return true;
-            QSettings cmd(hive + QStringLiteral("\\Software\\Classes\\") + scheme
-                              + QStringLiteral("\\shell\\open\\command"),
+            QSettings cmd(hive + QStringLiteral("\\Software\\Classes\\") + scheme +
+                              QStringLiteral("\\shell\\open\\command"),
                           QSettings::NativeFormat);
             if (!cmd.value(QStringLiteral(".")).toString().isEmpty())
                 return true;
@@ -468,22 +455,23 @@ static bool protocolRegistered(const QStringList &schemes)
     return false;
 }
 
-static QString fromStartMenuShortcut(const QStringList &nameHints)
-{
+static QString fromStartMenuShortcut(const QStringList& nameHints) {
     QStringList roots;
     roots << QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation);
-    roots << qEnvironmentVariable("ProgramData") + QStringLiteral("/Microsoft/Windows/Start Menu/Programs");
-    roots << QDir::homePath() + QStringLiteral("/AppData/Roaming/Microsoft/Windows/Start Menu/Programs");
-    for (const QString &root : roots) {
+    roots << qEnvironmentVariable("ProgramData") +
+                 QStringLiteral("/Microsoft/Windows/Start Menu/Programs");
+    roots << QDir::homePath() +
+                 QStringLiteral("/AppData/Roaming/Microsoft/Windows/Start Menu/Programs");
+    for (const QString& root : roots) {
         if (root.isEmpty() || !QDir(root).exists())
             continue;
-        QDirIterator it(root, QStringList{QStringLiteral("*.lnk")}, QDir::Files,
-                        QDirIterator::Subdirectories);
+        QDirIterator it(
+            root, QStringList{QStringLiteral("*.lnk")}, QDir::Files, QDirIterator::Subdirectories);
         while (it.hasNext()) {
             it.next();
             const QString base = it.fileInfo().completeBaseName().toLower();
             bool hit = false;
-            for (const QString &h : nameHints) {
+            for (const QString& h : nameHints) {
                 if (base.contains(h.toLower())) {
                     hit = true;
                     break;
@@ -499,17 +487,16 @@ static QString fromStartMenuShortcut(const QStringList &nameHints)
     return {};
 }
 
-QString findDesktopAumid(const QString &site)
-{
+QString findDesktopAumid(const QString& site) {
     const QString root = localAppData() + QStringLiteral("/Packages");
     QDir dir(root);
     if (!dir.exists())
         return {};
     const QStringList prefixes = SiteCatalog::desktopPackagePrefixes(site);
     const QFileInfoList entries = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
-    for (const QFileInfo &fi : entries) {
+    for (const QFileInfo& fi : entries) {
         const QString name = fi.fileName();
-        for (const QString &p : prefixes) {
+        for (const QString& p : prefixes) {
             if (name.startsWith(p))
                 return name + QStringLiteral("!App");
         }
@@ -517,10 +504,9 @@ QString findDesktopAumid(const QString &site)
     return {};
 }
 
-QString findDesktopExe(const QString &site)
-{
+QString findDesktopExe(const QString& site) {
     const QString s = SiteCatalog::normalizeSite(site);
-    for (const QString &name : SiteCatalog::desktopProcessNames(s)) {
+    for (const QString& name : SiteCatalog::desktopProcessNames(s)) {
         const QString path = fromAppPaths(name);
         if (!path.isEmpty())
             return path;
@@ -534,7 +520,7 @@ QString findDesktopExe(const QString &site)
 
     const QString local = localAppData();
     const QString windowsApps = local + QStringLiteral("/Microsoft/WindowsApps");
-    for (const QString &name : SiteCatalog::desktopProcessNames(s)) {
+    for (const QString& name : SiteCatalog::desktopProcessNames(s)) {
         const QString path = windowsApps + QLatin1Char('/') + name;
         if (QFileInfo::exists(path))
             return path;
@@ -555,7 +541,7 @@ QString findDesktopExe(const QString &site)
                  << QStringLiteral("Doubao/Doubao.exe")
                  << QStringLiteral("Programs/Doubao/Doubao.exe");
         // 常见自定义盘符安装
-        for (const QString &root : {QStringLiteral("C:/Doubao/Doubao.exe"),
+        for (const QString& root : {QStringLiteral("C:/Doubao/Doubao.exe"),
                                     QStringLiteral("D:/Doubao/Doubao.exe"),
                                     QStringLiteral("E:/Doubao/Doubao.exe")}) {
             if (QFileInfo::exists(root))
@@ -572,7 +558,7 @@ QString findDesktopExe(const QString &site)
                  << QStringLiteral("Programs/DeepSeek Chat/DeepSeek Chat.exe")
                  << QStringLiteral("DeepSeek/DeepSeek.exe");
     }
-    for (const QString &rel : patterns) {
+    for (const QString& rel : patterns) {
         const QString path = local + QLatin1Char('/') + rel;
         if (QFileInfo::exists(path))
             return path;
@@ -591,22 +577,26 @@ QString findDesktopExe(const QString &site)
         else if (s == QLatin1String("deepseek"))
             roots << local + QStringLiteral("/Programs/DeepSeek");
         else if (s == QLatin1String("gemini"))
-            roots << local + QStringLiteral("/Programs/Gemini") << local + QStringLiteral("/Google/Gemini");
+            roots << local + QStringLiteral("/Programs/Gemini")
+                  << local + QStringLiteral("/Google/Gemini");
         else if (s == QLatin1String("chatgpt"))
-            roots << local + QStringLiteral("/ChatGPT") << local + QStringLiteral("/Programs/ChatGPT");
+            roots << local + QStringLiteral("/ChatGPT")
+                  << local + QStringLiteral("/Programs/ChatGPT");
 
-        for (const QString &root : roots) {
+        for (const QString& root : roots) {
             if (!QDir(root).exists())
                 continue;
-            QDirIterator it(root, SiteCatalog::desktopProcessNames(s), QDir::Files,
+            QDirIterator it(root,
+                            SiteCatalog::desktopProcessNames(s),
+                            QDir::Files,
                             QDirIterator::Subdirectories);
             QString best;
             while (it.hasNext()) {
                 it.next();
                 // 跳过明显非主程序的工具链目录
                 const QString fp = it.filePath();
-                if (fp.contains(QLatin1String("sandbox"), Qt::CaseInsensitive)
-                    || fp.contains(QLatin1String("repair"), Qt::CaseInsensitive))
+                if (fp.contains(QLatin1String("sandbox"), Qt::CaseInsensitive) ||
+                    fp.contains(QLatin1String("repair"), Qt::CaseInsensitive))
                     continue;
                 best = fp;
             }
@@ -635,26 +625,22 @@ QString findDesktopExe(const QString &site)
 }
 
 namespace {
-QMutex &desktopCacheMutex()
-{
+QMutex& desktopCacheMutex() {
     static QMutex m;
     return m;
 }
-QHash<QString, QPair<bool, qint64>> &desktopCache()
-{
+QHash<QString, QPair<bool, qint64>>& desktopCache() {
     static QHash<QString, QPair<bool, qint64>> c;
     return c;
 }
 } // namespace
 
-void invalidateDesktopCache()
-{
+void invalidateDesktopCache() {
     QMutexLocker lock(&desktopCacheMutex());
     desktopCache().clear();
 }
 
-bool isDesktopInstalled(const QString &site)
-{
+bool isDesktopInstalled(const QString& site) {
     const QString s = SiteCatalog::normalizeSite(site);
     constexpr qint64 kTtlMs = 3000;
     const qint64 now = static_cast<qint64>(GetTickCount64());
@@ -666,8 +652,8 @@ bool isDesktopInstalled(const QString &site)
             return it->first;
     }
 
-    bool installed = !findDesktopExe(s).isEmpty() || !findDesktopAumid(s).isEmpty()
-        || findDesktopWindow(s) != nullptr;
+    bool installed = !findDesktopExe(s).isEmpty() || !findDesktopAumid(s).isEmpty() ||
+                     findDesktopWindow(s) != nullptr;
     if (!installed) {
         const QStringList protocols = SiteCatalog::desktopProtocols(s);
         if (!protocols.isEmpty())
@@ -681,8 +667,7 @@ bool isDesktopInstalled(const QString &site)
     return installed;
 }
 
-bool launchBrowser(const QString &browser, const QString &url)
-{
+bool launchBrowser(const QString& browser, const QString& url) {
     const QString exe = findBrowserExe(browser);
     if (!exe.isEmpty()) {
         // 直接交给浏览器打开 URL，不在地址栏逐字输入
@@ -692,23 +677,32 @@ bool launchBrowser(const QString &browser, const QString &url)
             args = QStringLiteral("-new-tab \"%1\"").arg(url);
         else
             args = QStringLiteral("--new-tab \"%1\"").arg(url);
-        return reinterpret_cast<intptr_t>(ShellExecuteW(
-                   nullptr, L"open", reinterpret_cast<LPCWSTR>(exe.utf16()),
-                   reinterpret_cast<LPCWSTR>(args.utf16()), nullptr, SW_SHOWNORMAL))
-            > 32;
+        return reinterpret_cast<intptr_t>(ShellExecuteW(nullptr,
+                                                        L"open",
+                                                        reinterpret_cast<LPCWSTR>(exe.utf16()),
+                                                        reinterpret_cast<LPCWSTR>(args.utf16()),
+                                                        nullptr,
+                                                        SW_SHOWNORMAL)) > 32;
     }
-    return reinterpret_cast<intptr_t>(ShellExecuteW(
-               nullptr, L"open", reinterpret_cast<LPCWSTR>(url.utf16()), nullptr, nullptr, SW_SHOWNORMAL))
-        > 32;
+    return reinterpret_cast<intptr_t>(ShellExecuteW(nullptr,
+                                                    L"open",
+                                                    reinterpret_cast<LPCWSTR>(url.utf16()),
+                                                    nullptr,
+                                                    nullptr,
+                                                    SW_SHOWNORMAL)) > 32;
 }
 
-bool launchDesktop(const QString &site)
-{
+bool launchDesktop(const QString& site) {
     const QString s = SiteCatalog::normalizeSite(site);
     const QString exe = findDesktopExe(s);
     if (!exe.isEmpty()) {
-        const auto rc = reinterpret_cast<intptr_t>(ShellExecuteW(
-            nullptr, L"open", reinterpret_cast<LPCWSTR>(exe.utf16()), nullptr, nullptr, SW_SHOWNORMAL));
+        const auto rc =
+            reinterpret_cast<intptr_t>(ShellExecuteW(nullptr,
+                                                     L"open",
+                                                     reinterpret_cast<LPCWSTR>(exe.utf16()),
+                                                     nullptr,
+                                                     nullptr,
+                                                     SW_SHOWNORMAL));
         if (rc > 32)
             return true;
     }
@@ -716,19 +710,23 @@ bool launchDesktop(const QString &site)
     if (!aumid.isEmpty()) {
         const QString explorer = QStringLiteral("explorer.exe");
         const QString args = QStringLiteral("shell:AppsFolder\\%1").arg(aumid);
-        if (reinterpret_cast<intptr_t>(ShellExecuteW(
-                nullptr, L"open", reinterpret_cast<LPCWSTR>(explorer.utf16()),
-                reinterpret_cast<LPCWSTR>(args.utf16()), nullptr, SW_SHOWNORMAL))
-            > 32)
+        if (reinterpret_cast<intptr_t>(ShellExecuteW(nullptr,
+                                                     L"open",
+                                                     reinterpret_cast<LPCWSTR>(explorer.utf16()),
+                                                     reinterpret_cast<LPCWSTR>(args.utf16()),
+                                                     nullptr,
+                                                     SW_SHOWNORMAL)) > 32)
             return true;
     }
     // 全站：已注册的自定义协议唤起
-    for (const QString &scheme : SiteCatalog::desktopProtocols(s)) {
+    for (const QString& scheme : SiteCatalog::desktopProtocols(s)) {
         const QString uri = scheme + QLatin1Char(':');
-        if (reinterpret_cast<intptr_t>(ShellExecuteW(nullptr, L"open",
-                                                     reinterpret_cast<LPCWSTR>(uri.utf16()), nullptr,
-                                                     nullptr, SW_SHOWNORMAL))
-            > 32)
+        if (reinterpret_cast<intptr_t>(ShellExecuteW(nullptr,
+                                                     L"open",
+                                                     reinterpret_cast<LPCWSTR>(uri.utf16()),
+                                                     nullptr,
+                                                     nullptr,
+                                                     SW_SHOWNORMAL)) > 32)
             return true;
     }
     return false;

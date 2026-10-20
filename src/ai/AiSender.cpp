@@ -16,33 +16,71 @@
 #include <QDir>
 #include <QMetaObject>
 #include <QPointer>
+#include <QSemaphore>
 #include <QStandardPaths>
-#include <QtConcurrent>
+#include <QThread>
+#include <QThreadPool>
+
+#include <atomic>
+#include <functional>
+#include <memory>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
 
-AiSender::AiSender(QObject *parent)
-    : QObject(parent)
-{
+namespace {
+
+/**
+ * 在 GUI 线程执行 fn 并等待完成，但最多等 timeoutMs。
+ * 不用 BlockingQueuedConnection：程序退出或 GUI 线程卡住时它会无限期挂死工作线程，
+ * 进而让 QThreadPool 在析构时等不到任务结束。超时后标记过期，迟到的调用会被跳过；
+ * Gate 由 shared_ptr 保活，迟到的 lambda 不会访问已销毁的栈变量。
+ */
+bool runOnGuiThread(const std::function<void()>& fn, int timeoutMs = 5000) {
+    if (!qApp || !fn)
+        return false;
+    if (QThread::currentThread() == qApp->thread()) {
+        fn();
+        return true;
+    }
+    struct Gate {
+        QSemaphore sem{0};
+        std::atomic_bool expired{false};
+    };
+    const auto gate = std::make_shared<Gate>();
+    const bool posted = QMetaObject::invokeMethod(
+        qApp,
+        [fn, gate]() {
+            if (gate->expired.load(std::memory_order_acquire))
+                return;
+            fn();
+            gate->sem.release();
+        },
+        Qt::QueuedConnection);
+    if (!posted)
+        return false;
+    if (gate->sem.tryAcquire(1, timeoutMs))
+        return true;
+    gate->expired.store(true, std::memory_order_release);
+    return false;
 }
 
-void AiSender::emitNotify(const QString &msg)
-{
+} // namespace
+
+AiSender::AiSender(QObject* parent) : QObject(parent) {}
+
+void AiSender::emitNotify(const QString& msg) {
     QMetaObject::invokeMethod(this, [this, msg]() { emit notify(msg); }, Qt::QueuedConnection);
 }
 
-QString AiSender::saveTempImage(const QPixmap &image) const
-{
+QString AiSender::saveTempImage(const QPixmap& image) const {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
     if (dir.isEmpty() || image.isNull())
         return {};
     QDir().mkpath(dir);
     // 唯一文件名，避免并发覆盖；不嵌入用户路径信息
-    const QString path =
-        dir + QStringLiteral("/Cheet_%1.png")
-                  .arg(QDateTime::currentMSecsSinceEpoch());
+    QString path = dir + QStringLiteral("/Cheet_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
     if (!image.save(path, "PNG")) {
         qWarning("AiSender: temp image save failed");
         return {};
@@ -50,28 +88,46 @@ QString AiSender::saveTempImage(const QPixmap &image) const
     return path;
 }
 
-void AiSender::sendAsync(const Settings &settings, const QPixmap &image)
-{
+void AiSender::sendAsync(const Settings& settings, const QPixmap& image) {
+    // 已有发送在进行时直接忽略新请求，避免两个任务同时抢剪贴板与模拟输入
+    bool expected = false;
+    if (!m_sending.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+        qWarning("AiSender: send already in progress, ignored");
+        return;
+    }
+
     saveTempImage(image);
     ClipboardImage::copyForPaste(image);
 
     const QPointer<AiSender> self(this);
     // 把截图带进工作线程：导航若误清剪贴板，发送前可恢复
-    QtConcurrent::run([self, settings, image]() {
+    QThreadPool::globalInstance()->start([self, settings, image]() {
+        // 无论成功失败/对象销毁，先释放占用标记再通知，避免 finished 丢失时永久卡死
+        struct SendingGuard {
+            QPointer<AiSender> self;
+            ~SendingGuard() {
+                if (self)
+                    self->m_sending.store(false, std::memory_order_release);
+            }
+        };
+        const SendingGuard guard{self};
+
         if (!self)
             return;
         const bool ok = self->sendSync(settings, image);
         if (!self)
             return;
-        QMetaObject::invokeMethod(self.data(), [self, ok]() {
-            if (self)
-                emit self->finished(ok);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self.data(),
+            [self, ok]() {
+                if (self)
+                    emit self->finished(ok);
+            },
+            Qt::QueuedConnection);
     });
 }
 
-bool AiSender::sendSync(const Settings &settings, const QPixmap &image)
-{
+bool AiSender::sendSync(const Settings& settings, const QPixmap& image) {
 #ifdef Q_OS_WIN
     platform::ComApartment comApt;
     if (!comApt.ok()) {
@@ -79,21 +135,18 @@ bool AiSender::sendSync(const Settings &settings, const QPixmap &image)
         return false;
     }
 
-    auto &i18n = I18n::instance();
+    auto& i18n = I18n::instance();
     const QString site = settings.normalizedSite();
     const QString siteLabel = SiteCatalog::siteLabel(site);
 
-    // 导航可能误清剪贴板：贴图前在 GUI 线程恢复截图
+    // 导航可能误清剪贴板：贴图前在 GUI 线程恢复截图（限时等待，GUI 无响应则放弃发送）
     auto restoreImage = [&image](bool web) {
-        QMetaObject::invokeMethod(
-            qApp,
-            [&image, web]() {
-                if (web)
-                    ClipboardImage::copyForWebPaste(image);
-                else
-                    ClipboardImage::copyForPaste(image);
-            },
-            Qt::BlockingQueuedConnection);
+        return runOnGuiThread([image, web]() {
+            if (web)
+                ClipboardImage::copyForWebPaste(image);
+            else
+                ClipboardImage::copyForPaste(image);
+        });
     };
 
     // 启用桌面客户端：只走客户端，绝不回退浏览器
@@ -104,7 +157,8 @@ bool AiSender::sendSync(const Settings &settings, const QPixmap &image)
             return false;
         }
 
-        emitNotify(i18n.tr(QStringLiteral("notify_opening"), {{QStringLiteral("label"), siteLabel}}));
+        emitNotify(
+            i18n.tr(QStringLiteral("notify_opening"), {{QStringLiteral("label"), siteLabel}}));
         HWND hwnd = WinInput::findDesktopWindow(site);
         if (!hwnd) {
             if (!WinInput::launchDesktop(site)) {
@@ -136,9 +190,11 @@ bool AiSender::sendSync(const Settings &settings, const QPixmap &image)
             }
         }
 
-        restoreImage(false);
+        if (!restoreImage(false))
+            return false;
         if (pastePromptAndSend(settings, reinterpret_cast<quintptr>(hwnd), true, image)) {
-            emitNotify(i18n.tr(QStringLiteral("notify_sent"), {{QStringLiteral("site"), siteLabel}}));
+            emitNotify(
+                i18n.tr(QStringLiteral("notify_sent"), {{QStringLiteral("site"), siteLabel}}));
             return true;
         }
         emitNotify(i18n.tr(QStringLiteral("notify_desktop_stopped"),
@@ -161,27 +217,27 @@ bool AiSender::sendSync(const Settings &settings, const QPixmap &image)
     bool launched = false;
     HWND hwnd = BrowserNav::focusOrOpenTarget(browser, site, url, &launched);
     if (!platform::windowAlive(hwnd)) {
-        emitNotify(i18n.tr(QStringLiteral("notify_open_failed"),
-                           {{QStringLiteral("label"), browser}}));
+        emitNotify(
+            i18n.tr(QStringLiteral("notify_open_failed"), {{QStringLiteral("label"), browser}}));
         return false;
     }
 
     WinInput::setForeground(hwnd);
     // 新开标签 / 冷启动：多等页面与输入框就绪
-    const int pageWait = SiteCatalog::needsSimplePaste(site)
-                             ? (launched ? 5500 : 2000)
-                             : (launched ? 3000 : 600);
+    const int pageWait =
+        SiteCatalog::needsSimplePaste(site) ? (launched ? 5500 : 2000) : (launched ? 3000 : 600);
     WinInput::sleepMs(pageWait);
     if (!platform::windowAlive(hwnd)) {
         hwnd = WinInput::findBrowserWindow(browser);
         if (!platform::windowAlive(hwnd)) {
-            emitNotify(i18n.tr(QStringLiteral("notify_stopped"),
-                               {{QStringLiteral("browser"), browser}}));
+            emitNotify(
+                i18n.tr(QStringLiteral("notify_stopped"), {{QStringLiteral("browser"), browser}}));
             return false;
         }
     }
 
-    restoreImage(true);
+    if (!restoreImage(true))
+        return false;
     if (pastePromptAndSend(settings, reinterpret_cast<quintptr>(hwnd), false, image)) {
         emitNotify(i18n.tr(QStringLiteral("notify_sent"), {{QStringLiteral("site"), siteLabel}}));
         return true;
@@ -195,10 +251,12 @@ bool AiSender::sendSync(const Settings &settings, const QPixmap &image)
 #endif
 }
 
-bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, bool desktopMode,
-                                  const QPixmap &image)
-{
+bool AiSender::pastePromptAndSend(const Settings& settings,
+                                  quintptr hwndValue,
+                                  bool desktopMode,
+                                  const QPixmap& image) {
 #ifdef Q_OS_WIN
+    // NOLINTNEXTLINE(performance-no-int-to-ptr): HWND 在本类接口中以 quintptr 传递，此处还原
     HWND hwnd = reinterpret_cast<HWND>(hwndValue);
     if (!platform::windowAlive(hwnd))
         return false;
@@ -209,7 +267,8 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
     auto refreshAlive = [&]() -> bool {
         if (platform::windowAlive(hwnd))
             return true;
-        hwnd = desktopMode ? WinInput::findDesktopWindow(site) : WinInput::findBrowserWindow(browser);
+        hwnd =
+            desktopMode ? WinInput::findDesktopWindow(site) : WinInput::findBrowserWindow(browser);
         return platform::windowAlive(hwnd);
     };
 
@@ -221,15 +280,12 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
     };
 
     auto restoreClipImage = [&]() {
-        QMetaObject::invokeMethod(
-            qApp,
-            [&image, desktopMode]() {
-                if (desktopMode)
-                    ClipboardImage::copyForPaste(image);
-                else
-                    ClipboardImage::copyForWebPaste(image);
-            },
-            Qt::BlockingQueuedConnection);
+        return runOnGuiThread([image, desktopMode]() {
+            if (desktopMode)
+                ClipboardImage::copyForPaste(image);
+            else
+                ClipboardImage::copyForWebPaste(image);
+        });
     };
 
     UiaComposer::enableWebAccessibility(hwnd);
@@ -239,7 +295,7 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
     if (!desktopMode) {
         const QString cur = BrowserNav::readAddressBarUrl(hwnd).toLower();
         bool bad = false;
-        for (const QString &h : SiteCatalog::avoidUrlHints(site)) {
+        for (const QString& h : SiteCatalog::avoidUrlHints(site)) {
             if (cur.contains(h)) {
                 bad = true;
                 break;
@@ -252,7 +308,8 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
             hwnd = WinInput::findBrowserWindow(browser);
             if (platform::windowAlive(hwnd))
                 BrowserNav::waitAddressBarTarget(hwnd, site, 12000);
-            restoreClipImage();
+            if (!restoreClipImage())
+                return false;
             WinInput::sleepMs(800);
         }
     }
@@ -261,7 +318,7 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
     if (prompt.isEmpty())
         prompt = I18n::defaultPrompt(settings.normalizedLanguage());
 
-    auto &i18n = I18n::instance();
+    auto& i18n = I18n::instance();
     const QString siteLabel = SiteCatalog::siteLabel(site);
 
     // 贴不上图（未登录 / 套餐限制 / 粘贴失败）：一律停止，不再贴字、不发送
@@ -283,7 +340,7 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
 
     // 等输入框出现（新开标签页尤其需要；豆包等也走同一等待）
     {
-        const qint64 deadline = GetTickCount64() + 30000;
+        const ULONGLONG deadline = GetTickCount64() + 30000;
         while (GetTickCount64() < deadline) {
             if (abortIfGone())
                 return false;
@@ -299,12 +356,13 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
             return false;
 
         UiaComposer::ImagePasteResult pasteRc = UiaComposer::ImagePasteResult::Failed;
-        for (int attempt = 0; attempt < 3 && pasteRc != UiaComposer::ImagePasteResult::Ok
-             && pasteRc != UiaComposer::ImagePasteResult::Blocked;
+        for (int attempt = 0; attempt < 3 && pasteRc != UiaComposer::ImagePasteResult::Ok &&
+                              pasteRc != UiaComposer::ImagePasteResult::Blocked;
              ++attempt) {
             if (abortIfGone())
                 return false;
-            restoreClipImage();
+            if (!restoreClipImage())
+                return false;
             WinInput::setForeground(hwnd);
             if (!desktopMode) {
                 WinInput::sendKey(VK_ESCAPE);
@@ -332,7 +390,8 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
                 return false;
             const int before = UiaComposer::probeWindow(hwnd).attachments;
             WinInput::sendCtrlKey('V');
-            const int waitMs = qMax(4000, static_cast<int>(settings.pasteWaitSeconds * 1000) + 2000);
+            const int waitMs =
+                qMax(4000, static_cast<int>(settings.pasteWaitSeconds * 1000) + 2000);
             pasteRc = UiaComposer::waitImagePasteResult(hwnd, site, before, waitMs);
             qDebug() << "AiSender simplePaste attempt" << attempt << "rc" << int(pasteRc);
             if (pasteRc == UiaComposer::ImagePasteResult::WindowGone)
@@ -345,9 +404,8 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
             return false;
 
         // 贴图后焦点仍在输入框：直接贴字/回车，不再二次点击（避免指针闪烁）
-        QMetaObject::invokeMethod(
-            qApp, [prompt]() { QApplication::clipboard()->setText(prompt); },
-            Qt::BlockingQueuedConnection);
+        if (!runOnGuiThread([prompt]() { QApplication::clipboard()->setText(prompt); }))
+            return false;
         WinInput::sleepMs(150);
         if (abortIfGone())
             return false;
@@ -373,7 +431,8 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
     for (int attempt = 1; attempt <= 3; ++attempt) {
         if (abortIfGone())
             return false;
-        restoreClipImage();
+        if (!restoreClipImage())
+            return false;
         const int before = qMax(UiaComposer::scan(hwnd, site).attachments,
                                 UiaComposer::probeWindow(hwnd).attachments);
         if (!UiaComposer::focusComposer(hwnd, site)) {
@@ -403,8 +462,8 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
         return false;
 
     // 贴图后不再点输入框，直接贴提示词（指针不闪）
-    QMetaObject::invokeMethod(
-        qApp, [prompt]() { QApplication::clipboard()->setText(prompt); }, Qt::BlockingQueuedConnection);
+    if (!runOnGuiThread([prompt]() { QApplication::clipboard()->setText(prompt); }))
+        return false;
     WinInput::sleepMs(120);
     if (abortIfGone())
         return false;
@@ -428,8 +487,8 @@ bool AiSender::pastePromptAndSend(const Settings &settings, quintptr hwndValue, 
     if (abortIfGone())
         return false;
     if (UiaComposer::probeWindow(hwnd).imageBlocked) {
-        emitNotify(i18n.tr(QStringLiteral("notify_image_blocked"),
-                           {{QStringLiteral("site"), siteLabel}}));
+        emitNotify(
+            i18n.tr(QStringLiteral("notify_image_blocked"), {{QStringLiteral("site"), siteLabel}}));
         return false;
     }
 

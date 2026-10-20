@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Network Concurrent)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Network)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -82,6 +82,10 @@ qt_add_qml_module(cheetahClip
         resources/icons/sites/doubao.png
         resources/icons/sites/qwen.png
         resources/icons/sites/deepseek.png
+        resources/icons/browsers/edge.png
+        resources/icons/browsers/chrome.png
+        resources/icons/browsers/firefox.png
+        resources/icons/crosshair.png
 )
 
 target_include_directories(cheetahClip PRIVATE src)
@@ -93,7 +97,6 @@ target_link_libraries(cheetahClip PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Network
-    Qt6::Concurrent
 )
 
 if(WIN32)

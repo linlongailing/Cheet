@@ -2,6 +2,7 @@
 
 #include "i18n/I18n.h"
 
+#include <QCursor>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -22,97 +23,110 @@ constexpr int kHandleHit = 8;
 constexpr int kHandleRadius = 4;
 constexpr int kMinSel = 8;
 
-QString iconPath(const QString &key)
-{
+QString iconPath(const QString& key) {
     return QStringLiteral(":/qt/qml/CheetahClip/resources/icons/tools/%1.png").arg(key);
+}
+
+/** 截图准星光标（用户提供的准星图，热点在正中心）；加载失败回退系统十字 */
+QCursor crosshairCursor() {
+    static const QCursor cursor = []() {
+        const QPixmap pm(QStringLiteral(":/qt/qml/CheetahClip/resources/icons/crosshair.png"));
+        if (pm.isNull())
+            return QCursor(Qt::CrossCursor);
+        return QCursor(pm, pm.width() / 2, pm.height() / 2);
+    }();
+    return cursor;
 }
 } // namespace
 
-CaptureOverlay::CaptureOverlay(const QPixmap &screenshot, bool fixedMode, int fixedW, int fixedH,
-                               QWidget *parent)
-    : QWidget(parent)
-    , m_screenshot(screenshot)
-    , m_fixedMode(fixedMode)
-    , m_fixedW(fixedW)
-    , m_fixedH(fixedH)
-{
+CaptureOverlay::CaptureOverlay(const QPixmap& screenshot,
+                               bool fixedMode,
+                               int fixedW,
+                               int fixedH,
+                               QWidget* parent)
+    : QWidget(parent), m_screenshot(screenshot), m_fixedMode(fixedMode), m_fixedW(fixedW),
+      m_fixedH(fixedH) {
     setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool);
     setAttribute(Qt::WA_TranslucentBackground);
     setMouseTracking(true);
-    setCursor(Qt::CrossCursor);
+    setCursor(crosshairCursor());
     setFocusPolicy(Qt::StrongFocus);
 
     QRect geo;
-    for (QScreen *screen : QGuiApplication::screens())
+    for (QScreen* screen : QGuiApplication::screens())
         geo = geo.united(screen->geometry());
     setGeometry(geo);
 
     m_toolbar = new QWidget(this);
     m_toolbar->setObjectName(QStringLiteral("captureToolbar"));
-    m_toolbar->setStyleSheet(QStringLiteral(
-        "QWidget#captureToolbar {"
-        "  background: rgba(26,27,30,235);"
-        "  border: 1px solid #3a3d45;"
-        "  border-radius: 8px;"
-        "}"
-        "QToolButton {"
-        "  background: #4a4e58;"
-        "  border: 1px solid #5a5e68;"
-        "  border-radius: 6px;"
-        "  padding: 2px;"
-        "  min-width: 26px;"
-        "  max-width: 26px;"
-        "  min-height: 26px;"
-        "  max-height: 26px;"
-        "  color: #ffffff;"
-        "}"
-        "QToolButton:hover { background: #5a5e68; border-color: #6a6e78; }"
-        "QToolButton[active=\"true\"] {"
-        "  background: #2d6cdf;"
-        "  border-color: #3b7af0;"
-        "}"
-        "QToolButton#aiBtn {"
-        "  background: #2d6cdf;"
-        "  border-color: #2d6cdf;"
-        "  padding: 2px 8px;"
-        "  min-width: 56px;"
-        "  max-width: 72px;"
-        "  min-height: 26px;"
-        "  max-height: 26px;"
-        "  color: #ffffff;"
-        "  font-size: 11px;"
-        "}"
-        "QToolButton#aiBtn:hover { background: #3b7af0; }"
-        "QToolButton#cancelBtn {"
-        "  background: #e5484d;"
-        "  border-color: #e5484d;"
-        "  color: #ffffff;"
-        "}"
-        "QToolButton#cancelBtn:hover { background: #f2555a; border-color: #f2555a; }"
-        "QToolButton#okBtn {"
-        "  background: #30a46c;"
-        "  border-color: #30a46c;"
-        "  color: #ffffff;"
-        "}"
-        "QToolButton#okBtn:hover { background: #3cb179; border-color: #3cb179; }"));
+    m_toolbar->setStyleSheet(
+        QStringLiteral("QWidget#captureToolbar {"
+                       "  background: rgba(26,27,30,235);"
+                       "  border: 1px solid #3a3d45;"
+                       "  border-radius: 8px;"
+                       "}"
+                       "QToolButton {"
+                       "  background: #4a4e58;"
+                       "  border: 1px solid #5a5e68;"
+                       "  border-radius: 6px;"
+                       "  padding: 2px;"
+                       "  min-width: 26px;"
+                       "  max-width: 26px;"
+                       "  min-height: 26px;"
+                       "  max-height: 26px;"
+                       "  color: #ffffff;"
+                       "}"
+                       "QToolButton:hover { background: #5a5e68; border-color: #6a6e78; }"
+                       "QToolButton[active=\"true\"] {"
+                       "  background: #2d6cdf;"
+                       "  border-color: #3b7af0;"
+                       "}"
+                       "QToolButton#aiBtn {"
+                       "  background: #2d6cdf;"
+                       "  border-color: #2d6cdf;"
+                       "  padding: 2px 8px;"
+                       "  min-width: 56px;"
+                       "  max-width: 72px;"
+                       "  min-height: 26px;"
+                       "  max-height: 26px;"
+                       "  color: #ffffff;"
+                       "  font-size: 11px;"
+                       "}"
+                       "QToolButton#aiBtn:hover { background: #3b7af0; }"
+                       "QToolButton#cancelBtn {"
+                       "  background: #e5484d;"
+                       "  border-color: #e5484d;"
+                       "  color: #ffffff;"
+                       "}"
+                       "QToolButton#cancelBtn:hover { background: #f2555a; border-color: #f2555a; }"
+                       "QToolButton#okBtn {"
+                       "  background: #30a46c;"
+                       "  border-color: #30a46c;"
+                       "  color: #ffffff;"
+                       "}"
+                       "QToolButton#okBtn:hover { background: #3cb179; border-color: #3cb179; }"));
 
-    auto *lay = new QHBoxLayout(m_toolbar);
+    auto* lay = new QHBoxLayout(m_toolbar);
     lay->setContentsMargins(6, 4, 6, 4);
     lay->setSpacing(4);
 
-    auto &i18n = I18n::instance();
-    const QStringList keys = {QStringLiteral("rect"),    QStringLiteral("ellipse"),
-                              QStringLiteral("arrow"),   QStringLiteral("pen"),
-                              QStringLiteral("text"),    QStringLiteral("undo"),
-                              QStringLiteral("cancel"),  QStringLiteral("ok"),
+    auto& i18n = I18n::instance();
+    const QStringList keys = {QStringLiteral("rect"),
+                              QStringLiteral("ellipse"),
+                              QStringLiteral("arrow"),
+                              QStringLiteral("pen"),
+                              QStringLiteral("text"),
+                              QStringLiteral("undo"),
+                              QStringLiteral("cancel"),
+                              QStringLiteral("ok"),
                               QStringLiteral("ai")};
 
-    for (const QString &key : keys) {
-        auto *btn = new QToolButton(m_toolbar);
+    for (const QString& key : keys) {
+        auto* btn = new QToolButton(m_toolbar);
         btn->setAutoRaise(false);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setToolTip(i18n.tr(QStringLiteral("tool_%1").arg(key)) + QLatin1Char('\n')
-                        + i18n.tr(QStringLiteral("tool_%1_desc").arg(key)));
+        btn->setToolTip(i18n.tr(QStringLiteral("tool_%1").arg(key)) + QLatin1Char('\n') +
+                        i18n.tr(QStringLiteral("tool_%1_desc").arg(key)));
         if (key == QLatin1String("ai")) {
             // 用文案区分中英文：中文「AI 问询」、英文「AI ask」
             btn->setObjectName(QStringLiteral("aiBtn"));
@@ -151,6 +165,9 @@ CaptureOverlay::CaptureOverlay(const QPixmap &screenshot, bool fixedMode, int fi
     m_toolbar->adjustSize();
     m_toolbar->hide();
 
+    m_mousePos = mapFromGlobal(QCursor::pos());
+    m_hasMousePos = rect().contains(m_mousePos);
+
     if (m_fixedMode) {
         m_origin = QPoint(width() / 2, height() / 2);
         m_current = m_origin;
@@ -163,16 +180,14 @@ CaptureOverlay::CaptureOverlay(const QPixmap &screenshot, bool fixedMode, int fi
     }
 }
 
-QIcon CaptureOverlay::loadToolIcon(const QString &key)
-{
+QIcon CaptureOverlay::loadToolIcon(const QString& key) {
     const QPixmap pm(iconPath(key));
     if (pm.isNull())
         return {};
     return QIcon(pm);
 }
 
-QRect CaptureOverlay::selectionRect() const
-{
+QRect CaptureOverlay::selectionRect() const {
     if (m_editing && m_lockedSelection.isValid())
         return m_lockedSelection;
     if (m_fixedMode && m_hasSelection) {
@@ -184,16 +199,14 @@ QRect CaptureOverlay::selectionRect() const
     return QRect(m_origin, m_current).normalized().intersected(rect());
 }
 
-QPoint CaptureOverlay::clampToSelection(const QPoint &p) const
-{
+QPoint CaptureOverlay::clampToSelection(const QPoint& p) const {
     const QRect sel = selectionRect();
     if (!sel.isValid())
         return p;
     return QPoint(qBound(p.x(), sel.left(), sel.right()), qBound(p.y(), sel.top(), sel.bottom()));
 }
 
-void CaptureOverlay::showToolbar()
-{
+void CaptureOverlay::showToolbar() {
     const QRect sel = selectionRect();
     if (!sel.isValid())
         return;
@@ -211,23 +224,21 @@ void CaptureOverlay::showToolbar()
     updateToolHighlights();
 }
 
-void CaptureOverlay::hideToolbar()
-{
+void CaptureOverlay::hideToolbar() {
     m_toolbar->hide();
 }
 
-void CaptureOverlay::updateToolHighlights()
-{
-    const QString active = m_tool == Tool::Rect       ? QStringLiteral("rect")
-                           : m_tool == Tool::Ellipse  ? QStringLiteral("ellipse")
-                           : m_tool == Tool::Arrow    ? QStringLiteral("arrow")
-                           : m_tool == Tool::Pen      ? QStringLiteral("pen")
-                           : m_tool == Tool::Text     ? QStringLiteral("text")
-                                                      : QString();
+void CaptureOverlay::updateToolHighlights() {
+    const QString active = m_tool == Tool::Rect      ? QStringLiteral("rect")
+                           : m_tool == Tool::Ellipse ? QStringLiteral("ellipse")
+                           : m_tool == Tool::Arrow   ? QStringLiteral("arrow")
+                           : m_tool == Tool::Pen     ? QStringLiteral("pen")
+                           : m_tool == Tool::Text    ? QStringLiteral("text")
+                                                     : QString();
     for (auto it = m_toolButtons.begin(); it != m_toolButtons.end(); ++it) {
-        const QString key = it.key();
-        if (key == QLatin1String("undo") || key == QLatin1String("cancel") || key == QLatin1String("ok")
-            || key == QLatin1String("ai"))
+        const QString& key = it.key();
+        if (key == QLatin1String("undo") || key == QLatin1String("cancel") ||
+            key == QLatin1String("ok") || key == QLatin1String("ai"))
             continue;
         it.value()->setProperty("active", key == active);
         it.value()->style()->unpolish(it.value());
@@ -235,8 +246,7 @@ void CaptureOverlay::updateToolHighlights()
     }
 }
 
-Qt::CursorShape CaptureOverlay::cursorForHandle(ResizeHandle handle)
-{
+Qt::CursorShape CaptureOverlay::cursorForHandle(ResizeHandle handle) {
     switch (handle) {
     case ResizeHandle::TopLeft:
     case ResizeHandle::BottomRight:
@@ -255,8 +265,7 @@ Qt::CursorShape CaptureOverlay::cursorForHandle(ResizeHandle handle)
     }
 }
 
-QPoint CaptureOverlay::handleCenter(ResizeHandle handle) const
-{
+QPoint CaptureOverlay::handleCenter(ResizeHandle handle) const {
     const QRect sel = selectionRect();
     const QPoint c = sel.center();
     switch (handle) {
@@ -281,26 +290,43 @@ QPoint CaptureOverlay::handleCenter(ResizeHandle handle) const
     }
 }
 
-CaptureOverlay::ResizeHandle CaptureOverlay::hitTestHandle(const QPoint &pos) const
-{
+CaptureOverlay::ResizeHandle CaptureOverlay::hitTestHandle(const QPoint& pos) const {
     // 固定宽高模式：选区尺寸不可拖动手柄调整
     if (m_fixedMode || !m_editing || !selectionRect().isValid())
         return ResizeHandle::None;
-    static const ResizeHandle handles[] = {
-        ResizeHandle::TopLeft,     ResizeHandle::Top,    ResizeHandle::TopRight,
-        ResizeHandle::Right,       ResizeHandle::BottomRight, ResizeHandle::Bottom,
-        ResizeHandle::BottomLeft,  ResizeHandle::Left,
-    };
-    for (ResizeHandle h : handles) {
-        const QPoint c = handleCenter(h);
-        if (QRect(c.x() - kHandleHit, c.y() - kHandleHit, kHandleHit * 2, kHandleHit * 2).contains(pos))
-            return h;
-    }
+
+    // 整条边线均可拖拽调整（不再只限于边中点/角上的手柄点）：
+    // 鼠标落在某条边线 ±kHandleHit 范围内即命中该边，角部优先按角命中
+    const QRect sel = selectionRect();
+    const bool nearLeft = qAbs(pos.x() - sel.left()) <= kHandleHit;
+    const bool nearRight = qAbs(pos.x() - sel.right()) <= kHandleHit;
+    const bool nearTop = qAbs(pos.y() - sel.top()) <= kHandleHit;
+    const bool nearBottom = qAbs(pos.y() - sel.bottom()) <= kHandleHit;
+    const bool withinX = pos.x() >= sel.left() - kHandleHit && pos.x() <= sel.right() + kHandleHit;
+    const bool withinY = pos.y() >= sel.top() - kHandleHit && pos.y() <= sel.bottom() + kHandleHit;
+
+    // 四角优先
+    if (nearLeft && nearTop)
+        return ResizeHandle::TopLeft;
+    if (nearRight && nearTop)
+        return ResizeHandle::TopRight;
+    if (nearLeft && nearBottom)
+        return ResizeHandle::BottomLeft;
+    if (nearRight && nearBottom)
+        return ResizeHandle::BottomRight;
+    // 四条整边
+    if (nearTop && withinX)
+        return ResizeHandle::Top;
+    if (nearBottom && withinX)
+        return ResizeHandle::Bottom;
+    if (nearLeft && withinY)
+        return ResizeHandle::Left;
+    if (nearRight && withinY)
+        return ResizeHandle::Right;
     return ResizeHandle::None;
 }
 
-QRect CaptureOverlay::resizedSelection(ResizeHandle handle, const QPoint &pos) const
-{
+QRect CaptureOverlay::resizedSelection(ResizeHandle handle, const QPoint& pos) const {
     QRect sel = selectionRect();
     if (!sel.isValid())
         return sel;
@@ -337,21 +363,21 @@ QRect CaptureOverlay::resizedSelection(ResizeHandle handle, const QPoint &pos) c
 
     sel = sel.normalized();
     if (sel.width() < kMinSel) {
-        if (handle == ResizeHandle::Left || handle == ResizeHandle::TopLeft
-            || handle == ResizeHandle::BottomLeft)
+        if (handle == ResizeHandle::Left || handle == ResizeHandle::TopLeft ||
+            handle == ResizeHandle::BottomLeft)
             sel.setLeft(sel.right() - kMinSel + 1);
-        else if (handle == ResizeHandle::Right || handle == ResizeHandle::TopRight
-                 || handle == ResizeHandle::BottomRight)
+        else if (handle == ResizeHandle::Right || handle == ResizeHandle::TopRight ||
+                 handle == ResizeHandle::BottomRight)
             sel.setRight(sel.left() + kMinSel - 1);
         else
             sel.setWidth(kMinSel);
     }
     if (sel.height() < kMinSel) {
-        if (handle == ResizeHandle::Top || handle == ResizeHandle::TopLeft
-            || handle == ResizeHandle::TopRight)
+        if (handle == ResizeHandle::Top || handle == ResizeHandle::TopLeft ||
+            handle == ResizeHandle::TopRight)
             sel.setTop(sel.bottom() - kMinSel + 1);
-        else if (handle == ResizeHandle::Bottom || handle == ResizeHandle::BottomLeft
-                 || handle == ResizeHandle::BottomRight)
+        else if (handle == ResizeHandle::Bottom || handle == ResizeHandle::BottomLeft ||
+                 handle == ResizeHandle::BottomRight)
             sel.setBottom(sel.top() + kMinSel - 1);
         else
             sel.setHeight(kMinSel);
@@ -359,8 +385,7 @@ QRect CaptureOverlay::resizedSelection(ResizeHandle handle, const QPoint &pos) c
     return sel.intersected(rect());
 }
 
-QRect CaptureOverlay::movedSelection(const QPoint &delta) const
-{
+QRect CaptureOverlay::movedSelection(const QPoint& delta) const {
     QRect sel = m_moveStartSel.translated(delta);
     if (sel.left() < 0)
         sel.translate(-sel.left(), 0);
@@ -373,14 +398,13 @@ QRect CaptureOverlay::movedSelection(const QPoint &delta) const
     return sel;
 }
 
-void CaptureOverlay::offsetAnnotations(const QPoint &delta)
-{
+void CaptureOverlay::offsetAnnotations(const QPoint& delta) {
     if (delta.isNull())
         return;
-    for (Annotation &a : m_annotations) {
+    for (Annotation& a : m_annotations) {
         a.p1 += delta;
         a.p2 += delta;
-        for (QPoint &pt : a.path)
+        for (QPoint& pt : a.path)
             pt += delta;
     }
     m_textPos += delta;
@@ -388,10 +412,9 @@ void CaptureOverlay::offsetAnnotations(const QPoint &delta)
         m_textEntry->move(m_textEntry->pos() + delta);
 }
 
-void CaptureOverlay::updateCursor()
-{
+void CaptureOverlay::updateCursor() {
     if (!m_editing) {
-        setCursor(Qt::CrossCursor);
+        setCursor(crosshairCursor());
         return;
     }
     if (m_resizing || m_hoverHandle != ResizeHandle::None) {
@@ -410,24 +433,19 @@ void CaptureOverlay::updateCursor()
     case Tool::Text:
         setCursor(Qt::IBeamCursor);
         break;
-    case Tool::Pen:
-        setCursor(Qt::CrossCursor);
-        break;
     default:
-        setCursor(Qt::CrossCursor);
+        setCursor(crosshairCursor());
         break;
     }
 }
 
-void CaptureOverlay::setTool(Tool tool)
-{
+void CaptureOverlay::setTool(Tool tool) {
     m_tool = tool;
     updateToolHighlights();
     updateCursor();
 }
 
-void CaptureOverlay::onToolClicked(const QString &key)
-{
+void CaptureOverlay::onToolClicked(const QString& key) {
     commitTextEntry();
     if (key == QLatin1String("undo")) {
         undoLast();
@@ -461,16 +479,14 @@ void CaptureOverlay::onToolClicked(const QString &key)
     setTool(m_tool == next ? Tool::None : next);
 }
 
-void CaptureOverlay::undoLast()
-{
+void CaptureOverlay::undoLast() {
     if (m_annotations.isEmpty())
         return;
     m_annotations.removeLast();
     update();
 }
 
-void CaptureOverlay::placeTextEntry(const QPoint &pos)
-{
+void CaptureOverlay::placeTextEntry(const QPoint& pos) {
     const QRect sel = selectionRect();
     if (!sel.isValid() || !sel.contains(pos))
         return;
@@ -482,18 +498,18 @@ void CaptureOverlay::placeTextEntry(const QPoint &pos)
         m_textEntry->setFrame(false);
         m_textEntry->setAttribute(Qt::WA_TranslucentBackground);
         m_textEntry->setAutoFillBackground(false);
-        m_textEntry->setStyleSheet(QStringLiteral(
-            "QLineEdit {"
-            "  background: transparent;"
-            "  color: #ff4d4f;"
-            "  border: none;"
-            "  padding: 0;"
-            "  margin: 0;"
-            "  font-family: 'Microsoft YaHei UI';"
-            "  font-size: 14px;"
-            "  selection-background-color: rgba(255,77,79,80);"
-            "  selection-color: #ff4d4f;"
-            "}"));
+        m_textEntry->setStyleSheet(
+            QStringLiteral("QLineEdit {"
+                           "  background: transparent;"
+                           "  color: #ff4d4f;"
+                           "  border: none;"
+                           "  padding: 0;"
+                           "  margin: 0;"
+                           "  font-family: 'Microsoft YaHei UI';"
+                           "  font-size: 14px;"
+                           "  selection-background-color: rgba(255,77,79,80);"
+                           "  selection-color: #ff4d4f;"
+                           "}"));
         connect(m_textEntry, &QLineEdit::returnPressed, this, &CaptureOverlay::commitTextEntry);
         connect(m_textEntry, &QLineEdit::editingFinished, this, &CaptureOverlay::commitTextEntry);
     }
@@ -510,8 +526,7 @@ void CaptureOverlay::placeTextEntry(const QPoint &pos)
     m_textEntry->setFocus();
 }
 
-void CaptureOverlay::commitTextEntry()
-{
+void CaptureOverlay::commitTextEntry() {
     if (!m_textEntry || !m_textEntry->isVisible())
         return;
     const QString text = m_textEntry->text().trimmed();
@@ -529,14 +544,15 @@ void CaptureOverlay::commitTextEntry()
     update();
 }
 
-void CaptureOverlay::drawArrow(QPainter &p, const QPoint &from, const QPoint &to) const
-{
+void CaptureOverlay::drawArrow(QPainter& p, const QPoint& from, const QPoint& to) const {
     p.drawLine(from, to);
     const qreal angle = qAtan2(qreal(to.y() - from.y()), qreal(to.x() - from.x()));
     const qreal size = 12.0;
     constexpr qreal kPi = 3.14159265358979323846;
-    const QPointF left(to.x() - size * qCos(angle - kPi / 6), to.y() - size * qSin(angle - kPi / 6));
-    const QPointF right(to.x() - size * qCos(angle + kPi / 6), to.y() - size * qSin(angle + kPi / 6));
+    const QPointF left(to.x() - size * qCos(angle - kPi / 6),
+                       to.y() - size * qSin(angle - kPi / 6));
+    const QPointF right(to.x() - size * qCos(angle + kPi / 6),
+                        to.y() - size * qSin(angle + kPi / 6));
     QPainterPath head;
     head.moveTo(to);
     head.lineTo(left);
@@ -545,13 +561,12 @@ void CaptureOverlay::drawArrow(QPainter &p, const QPoint &from, const QPoint &to
     p.fillPath(head, kAnnColor);
 }
 
-void CaptureOverlay::drawAnnotation(QPainter &p, const Annotation &a, const QPoint &origin) const
-{
+void CaptureOverlay::drawAnnotation(QPainter& p, const Annotation& a, const QPoint& origin) const {
     p.setRenderHint(QPainter::Antialiasing, true);
     p.setPen(QPen(kAnnColor, kAnnWidth, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     p.setBrush(Qt::NoBrush);
 
-    auto map = [&](const QPoint &pt) { return pt - origin; };
+    auto map = [&](const QPoint& pt) { return pt - origin; };
 
     switch (a.type) {
     case Tool::Rect:
@@ -582,8 +597,7 @@ void CaptureOverlay::drawAnnotation(QPainter &p, const Annotation &a, const QPoi
     }
 }
 
-QPixmap CaptureOverlay::renderResult() const
-{
+QPixmap CaptureOverlay::renderResult() const {
     const QRect sel = selectionRect();
     if (sel.width() < 2 || sel.height() < 2)
         return {};
@@ -593,13 +607,12 @@ QPixmap CaptureOverlay::renderResult() const
         return {};
     QPainter p(&out);
     p.setRenderHint(QPainter::SmoothPixmapTransform, false);
-    for (const Annotation &a : m_annotations)
+    for (const Annotation& a : m_annotations)
         drawAnnotation(p, a, sel.topLeft());
     return out;
 }
 
-void CaptureOverlay::confirm(bool sendAi)
-{
+void CaptureOverlay::confirm(bool sendAi) {
     commitTextEntry();
     const QPixmap shot = renderResult();
     if (shot.isNull()) {
@@ -609,8 +622,113 @@ void CaptureOverlay::confirm(bool sendAi)
     emit finished(shot, sendAi);
 }
 
-void CaptureOverlay::paintEvent(QPaintEvent *)
-{
+void CaptureOverlay::drawMagnifierInfo(QPainter& p) const {
+    if (!m_hasMousePos || m_screenshot.isNull())
+        return;
+
+    constexpr int kZoom = 5;
+    constexpr int kSrc = 19; // 19×19 源像素 ×5 = 95×95 放大区
+    constexpr int kMag = kSrc * kZoom;
+    constexpr int kInfoH = 40;
+    // 黑框与上方放大框等宽同左缘，天然居中对齐（中心线重合）
+    constexpr int kPanelW = kMag;
+
+    // 当前像素颜色（从截图小区域取，避免整屏转 QImage）
+    QColor color(Qt::black);
+    const QPixmap one = m_screenshot.copy(QRect(m_mousePos, QSize(1, 1)));
+    if (!one.isNull())
+        color = one.toImage().pixelColor(0, 0);
+
+    // 四象限择优：默认左下；放不下依次换位。拖拽时优先选区外侧，避免盖住正在画的选区
+    // 取色框角点不压准星中心，而是落在准星圆周的对角点（45°/135°/225°/315°）上：
+    // 准星圆半径约 8px，对角方向分量 = 8/√2 ≈ 6px。面板朝哪个象限展开，
+    // 朝向鼠标的角点就偏移到该象限的圆周对角点，如左下展开→角点在圆周左下(225°)处
+    constexpr int kDiag = 6;
+    const int kPanelH = kMag + kInfoH;
+    const int westX = m_mousePos.x() - kDiag - kPanelW;
+    const int eastX = m_mousePos.x() + kDiag;
+    const int southY = m_mousePos.y() + kDiag;
+    const int northY = m_mousePos.y() - kDiag - kPanelH;
+
+    bool prefEast = false;
+    bool prefNorth = false;
+    if (m_dragging) {
+        // 鼠标是选区活动角：面板放到活动角外侧
+        prefEast = m_mousePos.x() >= m_origin.x();
+        prefNorth = m_mousePos.y() < m_origin.y();
+    }
+    const int prefX = prefEast ? eastX : westX;
+    const int altX = prefEast ? westX : eastX;
+    const int prefY = prefNorth ? northY : southY;
+    const int altY = prefNorth ? southY : northY;
+    const QPoint candidates[4] = {{prefX, prefY}, {prefX, altY}, {altX, prefY}, {altX, altY}};
+
+    int x = candidates[0].x();
+    int y = candidates[0].y();
+    bool placed = false;
+    for (const QPoint& c : candidates) {
+        const QRect r(c.x(), c.y(), kPanelW, kPanelH);
+        if (r.left() >= 0 && r.top() >= 0 && r.right() < width() && r.bottom() < height()) {
+            x = c.x();
+            y = c.y();
+            placed = true;
+            break;
+        }
+    }
+    if (!placed) {
+        // 极小屏幕等无象限可放时，夹回屏幕内
+        x = qBound(0, x, qMax(0, width() - kPanelW));
+        y = qBound(0, y, qMax(0, height() - kPanelH));
+    }
+
+    const QRect magRect(x + (kPanelW - kMag) / 2, y, kMag, kMag);
+    const QRect infoRect(x, y + kMag, kPanelW, kInfoH);
+
+    // 放大图（最近邻，保持像素颗粒）
+    QRect src(m_mousePos.x() - kSrc / 2, m_mousePos.y() - kSrc / 2, kSrc, kSrc);
+    src = src.intersected(rect());
+    p.save();
+    p.setRenderHint(QPainter::SmoothPixmapTransform, false);
+    p.fillRect(magRect, Qt::black);
+    if (src.isValid())
+        p.drawPixmap(magRect, m_screenshot, src);
+    // 像素网格
+    p.setPen(QPen(QColor(255, 255, 255, 28), 1));
+    for (int i = 1; i < kSrc; ++i) {
+        p.drawLine(magRect.left() + i * kZoom,
+                   magRect.top(),
+                   magRect.left() + i * kZoom,
+                   magRect.bottom());
+        p.drawLine(
+            magRect.left(), magRect.top() + i * kZoom, magRect.right(), magRect.top() + i * kZoom);
+    }
+    // 蓝色十字 + 中心像素白框
+    const int cx = magRect.left() + (kSrc / 2) * kZoom;
+    const int cy = magRect.top() + (kSrc / 2) * kZoom;
+    p.setPen(QPen(QColor(40, 90, 255), 1));
+    p.drawLine(magRect.left(), cy + kZoom / 2, magRect.right(), cy + kZoom / 2);
+    p.drawLine(cx + kZoom / 2, magRect.top(), cx + kZoom / 2, magRect.bottom());
+    p.setPen(QPen(Qt::white, 1));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(cx, cy, kZoom - 1, kZoom - 1);
+    p.setPen(QPen(QColor(30, 30, 30), 1));
+    p.drawRect(magRect.adjusted(0, 0, -1, -1));
+    p.restore();
+
+    // 信息条：屏幕坐标 + RGB；与放大框等宽，文字水平居中
+    const QPoint global = mapToGlobal(m_mousePos);
+    p.fillRect(infoRect, QColor(15, 15, 15, 225));
+    p.setPen(Qt::white);
+    p.setFont(QFont(QStringLiteral("Consolas"), 9));
+    const QString line1 = QStringLiteral("(%1, %2)").arg(global.x()).arg(global.y());
+    const QString line2 = QStringLiteral("RGB #%1%2%3")
+                              .arg(color.red(), 2, 16, QLatin1Char('0'))
+                              .arg(color.green(), 2, 16, QLatin1Char('0'))
+                              .arg(color.blue(), 2, 16, QLatin1Char('0'));
+    p.drawText(infoRect, Qt::AlignCenter, line1 + QLatin1Char('\n') + line2);
+}
+
+void CaptureOverlay::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::SmoothPixmapTransform, false);
     // m_screenshot 已设置 devicePixelRatio，按逻辑坐标铺满，输出仍为物理像素
@@ -628,9 +746,14 @@ void CaptureOverlay::paintEvent(QPaintEvent *)
         // 自由框选：四角 + 边中点白色调整手柄；固定宽高模式不显示、不可拖
         if (m_editing && !m_fixedMode) {
             static const ResizeHandle handles[] = {
-                ResizeHandle::TopLeft,     ResizeHandle::Top,    ResizeHandle::TopRight,
-                ResizeHandle::Right,       ResizeHandle::BottomRight, ResizeHandle::Bottom,
-                ResizeHandle::BottomLeft,  ResizeHandle::Left,
+                ResizeHandle::TopLeft,
+                ResizeHandle::Top,
+                ResizeHandle::TopRight,
+                ResizeHandle::Right,
+                ResizeHandle::BottomRight,
+                ResizeHandle::Bottom,
+                ResizeHandle::BottomLeft,
+                ResizeHandle::Left,
             };
             p.setPen(QPen(QColor(60, 60, 60), 1));
             p.setBrush(Qt::white);
@@ -644,7 +767,7 @@ void CaptureOverlay::paintEvent(QPaintEvent *)
         p.drawText(sel.topLeft() + QPoint(6, -8),
                    QStringLiteral("%1 × %2").arg(sel.width()).arg(sel.height()));
 
-        for (const Annotation &a : m_annotations)
+        for (const Annotation& a : m_annotations)
             drawAnnotation(p, a);
 
         if (m_drawing) {
@@ -658,15 +781,20 @@ void CaptureOverlay::paintEvent(QPaintEvent *)
     }
 
     if (!m_editing && !m_hasSelection) {
-        auto &i18n = I18n::instance();
+        auto& i18n = I18n::instance();
         p.setPen(QColor(255, 255, 255, 200));
         p.setFont(QFont(QStringLiteral("Microsoft YaHei UI"), 12));
         p.drawText(QPoint(24, 36), i18n.tr(QStringLiteral("capture_tip")));
     }
+
+    // 画选区之前 / 画选区时显示；选区确定进入编辑后消失
+    if (!m_editing)
+        drawMagnifierInfo(p);
 }
 
-void CaptureOverlay::mousePressEvent(QMouseEvent *event)
-{
+void CaptureOverlay::mousePressEvent(QMouseEvent* event) {
+    m_mousePos = event->pos();
+    m_hasMousePos = true;
     if (event->button() != Qt::LeftButton)
         return;
     if (m_toolbar->isVisible() && m_toolbar->geometry().contains(event->pos()))
@@ -727,12 +855,13 @@ void CaptureOverlay::mousePressEvent(QMouseEvent *event)
     m_current = m_origin;
     m_hasSelection = m_fixedMode;
     setTool(Tool::None);
-    setCursor(Qt::CrossCursor);
+    setCursor(crosshairCursor());
     update();
 }
 
-void CaptureOverlay::mouseMoveEvent(QMouseEvent *event)
-{
+void CaptureOverlay::mouseMoveEvent(QMouseEvent* event) {
+    m_mousePos = event->pos();
+    m_hasMousePos = true;
     if (m_editing) {
         if (m_resizing) {
             m_lockedSelection = resizedSelection(m_activeHandle, event->pos());
@@ -771,12 +900,13 @@ void CaptureOverlay::mouseMoveEvent(QMouseEvent *event)
         update();
         return;
     }
-    if (m_dragging)
-        update();
+    // 未拖拽时也要跟随刷新放大镜
+    update();
 }
 
-void CaptureOverlay::mouseReleaseEvent(QMouseEvent *event)
-{
+void CaptureOverlay::mouseReleaseEvent(QMouseEvent* event) {
+    m_mousePos = event->pos();
+    m_hasMousePos = true;
     if (event->button() != Qt::LeftButton)
         return;
 
@@ -844,8 +974,7 @@ void CaptureOverlay::mouseReleaseEvent(QMouseEvent *event)
     update();
 }
 
-void CaptureOverlay::keyPressEvent(QKeyEvent *event)
-{
+void CaptureOverlay::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
         if (m_textEntry && m_textEntry->isVisible()) {
             m_textEntry->hide();
@@ -854,8 +983,8 @@ void CaptureOverlay::keyPressEvent(QKeyEvent *event)
         emit cancelled();
         return;
     }
-    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
-        && m_editing && !(m_textEntry && m_textEntry->isVisible())) {
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) && m_editing &&
+        !(m_textEntry && m_textEntry->isVisible())) {
         confirm(false);
         return;
     }

@@ -11,25 +11,27 @@
 #undef WIN32_LEAN_AND_MEAN
 #endif
 
+// clang-format off
+// 顺序不可由 SortIncludes 调整：UIAutomation.h 依赖 windows.h/objbase.h 已先行包含
 #include <windows.h>
 #include <objbase.h>
 #include <UIAutomation.h>
+// clang-format on
 
 #include "platform/ComPtr.h"
 
 namespace platform {
 
 /** 进程内唯一的 UI Automation 入口；复用 ControlViewWalker。 */
-class UiaCore
-{
+class UiaCore {
 public:
-    static UiaCore &instance();
+    static UiaCore& instance();
 
     /** 在 CoUninitialize 之前调用，释放本线程 UIA 对象，避免悬空 COM。 */
     void shutdown();
 
-    IUIAutomation *automation();
-    IUIAutomationTreeWalker *controlWalker();
+    IUIAutomation* automation();
+    IUIAutomationTreeWalker* controlWalker();
 
     ComPtr<IUIAutomationElement> elementFromHwnd(HWND hwnd);
 
@@ -38,8 +40,8 @@ public:
 private:
     UiaCore();
     ~UiaCore() = default;
-    UiaCore(const UiaCore &) = delete;
-    UiaCore &operator=(const UiaCore &) = delete;
+    UiaCore(const UiaCore&) = delete;
+    UiaCore& operator=(const UiaCore&) = delete;
 
     void ensureCreated();
 
@@ -47,8 +49,7 @@ private:
     ComPtr<IUIAutomationTreeWalker> m_walker;
 };
 
-inline bool windowAlive(HWND hwnd)
-{
+inline bool windowAlive(HWND hwnd) {
     return hwnd != nullptr && IsWindow(hwnd) != FALSE;
 }
 

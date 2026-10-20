@@ -20,14 +20,14 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <windows.h>
 #include <dwmapi.h>
+#include <windows.h>
 
 namespace {
-void applyDarkTitleBar(QWindow *window)
-{
+void applyDarkTitleBar(QWindow* window) {
     if (!window)
         return;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr): QWindow::winId() 返回的即为 Win32 HWND
     const HWND hwnd = reinterpret_cast<HWND>(window->winId());
     if (!hwnd)
         return;
@@ -44,13 +44,9 @@ void applyDarkTitleBar(QWindow *window)
 } // namespace
 #endif
 
-Application::Application(QObject *parent)
-    : QObject(parent)
-{
-}
+Application::Application(QObject* parent) : QObject(parent) {}
 
-bool Application::initialize()
-{
+bool Application::initialize() {
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     m_settings = new SettingsController(this);
@@ -68,14 +64,15 @@ bool Application::initialize()
     connect(m_tray, &TrayIcon::settingsRequested, this, &Application::showSettings);
     connect(m_tray, &TrayIcon::quitRequested, qApp, &QCoreApplication::quit);
     connect(m_hotkeys, &HotkeyManager::activated, this, &Application::startCapture);
-    connect(m_settings, &SettingsController::saved, this, &Application::applySettingsFromController);
+    connect(
+        m_settings, &SettingsController::saved, this, &Application::applySettingsFromController);
     connect(m_capture, &CaptureController::aiInquireRequested, this, &Application::onAiInquire);
     connect(m_capture, &CaptureController::captureFinished, this, [this](bool copied) {
         m_busy.store(false, std::memory_order_release);
         if (copied)
             m_tray->notify(I18n::instance().tr(QStringLiteral("notify_copied")));
     });
-    connect(m_ai, &AiSender::notify, this, [this](const QString &msg) { m_tray->notify(msg); });
+    connect(m_ai, &AiSender::notify, this, [this](const QString& msg) { m_tray->notify(msg); });
     connect(m_ai, &AiSender::finished, this, [this](bool) {
         m_busy.store(false, std::memory_order_release);
     });
@@ -96,22 +93,19 @@ bool Application::initialize()
     return true;
 }
 
-void Application::registerHotkeyFromSettings()
-{
+void Application::registerHotkeyFromSettings() {
     const QString hk = m_settings->hotkey();
     if (!m_hotkeys->registerHotkey(hk))
         m_hotkeys->registerHotkey(QStringLiteral("alt+a"));
 }
 
-void Application::applySettingsFromController()
-{
+void Application::applySettingsFromController() {
     registerHotkeyFromSettings();
     m_capture->setSettings(m_settings->current());
     m_tray->retranslate(m_settings->hotkeyLabel());
 }
 
-void Application::finishSettingsWindowSetup(QQuickWindow *win)
-{
+void Application::finishSettingsWindowSetup(QQuickWindow* win) {
     if (!win)
         return;
     if (m_settingsWindow == win)
@@ -127,33 +121,32 @@ void Application::finishSettingsWindowSetup(QQuickWindow *win)
 #endif
 }
 
-void Application::ensureSettingsWindow()
-{
+void Application::ensureSettingsWindow() {
     if (m_settingsWindow || m_settingsLoading)
         return;
     m_settingsLoading = true;
 
     const QUrl url(QStringLiteral("qrc:/qt/qml/CheetahClip/qml/SettingsWindow.qml"));
     // 不用 SingleShot：objectCreated 可能先报其它对象，匹配到设置窗再断开
-    QMetaObject::Connection *conn = new QMetaObject::Connection;
-    *conn = QObject::connect(
-        &m_engine, &QQmlApplicationEngine::objectCreated, this,
-        [this, conn](QObject *obj, const QUrl &objUrl) {
-            if (!objUrl.path().endsWith(QLatin1String("SettingsWindow.qml")))
-                return;
-            QObject::disconnect(*conn);
-            delete conn;
-            m_settingsLoading = false;
-            if (!obj)
-                return;
-            if (auto *win = qobject_cast<QQuickWindow *>(obj))
-                finishSettingsWindowSetup(win);
-        });
+    QMetaObject::Connection* conn = new QMetaObject::Connection;
+    *conn = QObject::connect(&m_engine,
+                             &QQmlApplicationEngine::objectCreated,
+                             this,
+                             [this, conn](QObject* obj, const QUrl& objUrl) {
+                                 if (!objUrl.path().endsWith(QLatin1String("SettingsWindow.qml")))
+                                     return;
+                                 QObject::disconnect(*conn);
+                                 delete conn;
+                                 m_settingsLoading = false;
+                                 if (!obj)
+                                     return;
+                                 if (auto* win = qobject_cast<QQuickWindow*>(obj))
+                                     finishSettingsWindowSetup(win);
+                             });
     m_engine.load(url);
 }
 
-void Application::showSettings()
-{
+void Application::showSettings() {
     m_settings->reload();
     ensureSettingsWindow();
 
@@ -177,23 +170,27 @@ void Application::showSettings()
     }
 
     // 预加载尚未完成时，等窗口创建好再显示
-    QMetaObject::Connection *conn = new QMetaObject::Connection;
-    *conn = QObject::connect(
-        &m_engine, &QQmlApplicationEngine::objectCreated, this,
-        [this, present, conn](QObject *obj, const QUrl &objUrl) {
-            if (!obj || !objUrl.path().endsWith(QLatin1String("SettingsWindow.qml")))
-                return;
-            QObject::disconnect(*conn);
-            delete conn;
-            if (auto *win = qobject_cast<QQuickWindow *>(obj)) {
-                finishSettingsWindowSetup(win);
-                present();
-            }
-        });
+    QMetaObject::Connection* conn = new QMetaObject::Connection;
+    *conn = QObject::connect(&m_engine,
+                             &QQmlApplicationEngine::objectCreated,
+                             this,
+                             [this, present, conn](QObject* obj, const QUrl& objUrl) {
+                                 if (!objUrl.path().endsWith(QLatin1String("SettingsWindow.qml")))
+                                     return;
+                                 // 匹配到目标 URL 即断开并自释放（加载失败 obj==nullptr
+                                 // 时同样处理，避免连接泄漏）
+                                 QObject::disconnect(*conn);
+                                 delete conn;
+                                 if (!obj)
+                                     return;
+                                 if (auto* win = qobject_cast<QQuickWindow*>(obj)) {
+                                     finishSettingsWindowSetup(win);
+                                     present();
+                                 }
+                             });
 }
 
-void Application::startCapture()
-{
+void Application::startCapture() {
     bool expected = false;
     if (!m_busy.compare_exchange_strong(expected, true, std::memory_order_acq_rel))
         return;
@@ -202,13 +199,13 @@ void Application::startCapture()
     m_capture->startCapture();
 }
 
-void Application::onAiInquire(const QPixmap &image)
-{
+void Application::onAiInquire(const QPixmap& image) {
     // 发送期间保持 busy（captureFinished 可能先清掉）
     m_busy.store(true, std::memory_order_release);
     m_tray->notify(I18n::instance().tr(QStringLiteral("notify_sending")));
     const Settings s = m_settings->current();
-    qDebug("AiSender route: site=%s useDesktop=%d", qPrintable(s.normalizedSite()),
+    qDebug("AiSender route: site=%s useDesktop=%d",
+           qPrintable(s.normalizedSite()),
            int(s.useDesktopClient));
     m_ai->sendAsync(s, image);
 }

@@ -4,8 +4,7 @@
 #include <QApplication>
 #include <QQmlEngine>
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("Cheet"));
     QApplication::setOrganizationName(QStringLiteral("Cheet"));
@@ -18,7 +17,8 @@ int main(int argc, char *argv[])
     Application appCore;
     if (!appCore.initialize())
         return 1;
-    QObject::connect(&guard, &SingleInstance::activateRequested, &appCore, &Application::showSettings);
+    QObject::connect(
+        &guard, &SingleInstance::activateRequested, &appCore, &Application::showSettings);
 
     return app.exec();
 }

@@ -18,9 +18,8 @@ namespace {
 constexpr int kMenuPad = 8;
 constexpr int kShadowMargin = 20;
 
-QPushButton *makeItem(QWidget *parent)
-{
-    auto *btn = new QPushButton(parent);
+QPushButton* makeItem(QWidget* parent) {
+    auto* btn = new QPushButton(parent);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setFlat(true);
     btn->setFocusPolicy(Qt::NoFocus);
@@ -31,9 +30,7 @@ QPushButton *makeItem(QWidget *parent)
 
 } // namespace
 
-TrayIcon::TrayIcon(QObject *parent)
-    : QObject(parent)
-{
+TrayIcon::TrayIcon(QObject* parent) : QObject(parent) {
     m_tray = new QSystemTrayIcon(this);
     m_tray->setIcon(QIcon(QStringLiteral(":/qt/qml/CheetahClip/resources/icons/icon.png")));
     m_tray->setToolTip(QStringLiteral("Cheet"));
@@ -43,43 +40,42 @@ TrayIcon::TrayIcon(QObject *parent)
     m_menu->setAttribute(Qt::WA_TranslucentBackground);
     m_menu->setAttribute(Qt::WA_ShowWithoutActivating);
 
-    auto *outer = new QVBoxLayout(m_menu);
+    auto* outer = new QVBoxLayout(m_menu);
     outer->setContentsMargins(kShadowMargin, kShadowMargin, kShadowMargin, kShadowMargin);
     outer->setSpacing(0);
 
-    auto *card = new QWidget(m_menu);
+    auto* card = new QWidget(m_menu);
     card->setObjectName(QStringLiteral("trayMenuCard"));
     // 无此属性时，部分样式插件下 stylesheet 的 background/圆角不生效
     card->setAttribute(Qt::WA_StyledBackground, true);
-    card->setStyleSheet(QStringLiteral(
-        "QWidget#trayMenuCard {"
-        "  background: #ffffff;"
-        "  border-radius: 16px;"
-        "}"
-        "QPushButton {"
-        "  border: none;"
-        "  background: transparent;"
-        "  color: #111111;"
-        "  text-align: left;"
-        "  padding: 10px 24px;"
-        "  font-family: 'Microsoft YaHei UI';"
-        "  font-size: 14px;"
-        "  border-radius: 10px;"
-        "}"
-        "QPushButton:hover {"
-        "  background: #f2f2f2;"
-        "}"
-        "QPushButton:pressed {"
-        "  background: #e8e8e8;"
-        "}"));
+    card->setStyleSheet(QStringLiteral("QWidget#trayMenuCard {"
+                                       "  background: #ffffff;"
+                                       "  border-radius: 16px;"
+                                       "}"
+                                       "QPushButton {"
+                                       "  border: none;"
+                                       "  background: transparent;"
+                                       "  color: #111111;"
+                                       "  text-align: left;"
+                                       "  padding: 10px 24px;"
+                                       "  font-family: 'Microsoft YaHei UI';"
+                                       "  font-size: 14px;"
+                                       "  border-radius: 10px;"
+                                       "}"
+                                       "QPushButton:hover {"
+                                       "  background: #f2f2f2;"
+                                       "}"
+                                       "QPushButton:pressed {"
+                                       "  background: #e8e8e8;"
+                                       "}"));
 
-    auto *shadow = new QGraphicsDropShadowEffect(card);
+    auto* shadow = new QGraphicsDropShadowEffect(card);
     shadow->setBlurRadius(28);
     shadow->setOffset(0, 6);
     shadow->setColor(QColor(0, 0, 0, 55));
     card->setGraphicsEffect(shadow);
 
-    auto *lay = new QVBoxLayout(card);
+    auto* lay = new QVBoxLayout(card);
     lay->setContentsMargins(kMenuPad, kMenuPad, kMenuPad, kMenuPad);
     lay->setSpacing(2);
 
@@ -104,29 +100,30 @@ TrayIcon::TrayIcon(QObject *parent)
         emit quitRequested();
     });
 
-    connect(m_tray, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
-        if (reason == QSystemTrayIcon::Context) {
-            showMenuAtCursor();
-            return;
-        }
-        if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick)
-            emit settingsRequested();
-    });
+    connect(m_tray,
+            &QSystemTrayIcon::activated,
+            this,
+            [this](QSystemTrayIcon::ActivationReason reason) {
+                if (reason == QSystemTrayIcon::Context) {
+                    showMenuAtCursor();
+                    return;
+                }
+                if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick)
+                    emit settingsRequested();
+            });
 
     retranslate(QStringLiteral("Alt + A"));
     m_tray->show();
 }
 
-TrayIcon::~TrayIcon()
-{
+TrayIcon::~TrayIcon() {
     delete m_menu;
     m_menu = nullptr;
 }
 
-void TrayIcon::retranslate(const QString &hotkeyLabel)
-{
+void TrayIcon::retranslate(const QString& hotkeyLabel) {
     m_hotkeyLabel = hotkeyLabel;
-    auto &i18n = I18n::instance();
+    auto& i18n = I18n::instance();
     if (m_captureBtn)
         m_captureBtn->setText(
             i18n.tr(QStringLiteral("tray_capture"), {{QStringLiteral("hotkey"), hotkeyLabel}}));
@@ -136,20 +133,17 @@ void TrayIcon::retranslate(const QString &hotkeyLabel)
         m_quitBtn->setText(i18n.tr(QStringLiteral("tray_quit")));
 }
 
-void TrayIcon::notify(const QString &message)
-{
+void TrayIcon::notify(const QString& message) {
     if (m_tray)
         m_tray->showMessage(QStringLiteral("Cheet"), message, QSystemTrayIcon::Information, 3500);
 }
 
-void TrayIcon::hideMenu()
-{
+void TrayIcon::hideMenu() {
     if (m_menu)
         m_menu->hide();
 }
 
-void TrayIcon::showMenuAtCursor()
-{
+void TrayIcon::showMenuAtCursor() {
     if (!m_menu)
         return;
 
@@ -170,7 +164,7 @@ void TrayIcon::showMenuAtCursor()
     }
 
     const QPoint anchor = icon.isValid() ? icon.center() : QCursor::pos();
-    if (QScreen *screen = QGuiApplication::screenAt(anchor)) {
+    if (QScreen* screen = QGuiApplication::screenAt(anchor)) {
         const QRect ag = screen->availableGeometry();
         pos.setX(qBound(pos.x(), ag.left(), ag.right() - m_menu->width()));
         pos.setY(qBound(pos.y(), ag.top(), ag.bottom() - m_menu->height()));

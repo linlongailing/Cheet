@@ -7,22 +7,21 @@
 
 class CaptureOverlay;
 
-class CaptureController : public QObject
-{
+class CaptureController : public QObject {
     Q_OBJECT
 public:
-    explicit CaptureController(QObject *parent = nullptr);
+    explicit CaptureController(QObject* parent = nullptr);
 
-    void setSettings(const Settings &settings);
+    void setSettings(const Settings& settings);
     void startCapture();
 
 signals:
     void captureFinished(bool copied);
-    void aiInquireRequested(const QPixmap &image);
+    void aiInquireRequested(const QPixmap& image);
 
 private:
-    void onOverlayFinished(const QPixmap &image, bool sendAi);
+    void onOverlayFinished(const QPixmap& image, bool sendAi);
 
     Settings m_settings;
-    CaptureOverlay *m_overlay = nullptr;
+    CaptureOverlay* m_overlay = nullptr;
 };

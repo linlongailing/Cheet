@@ -12,23 +12,25 @@ class QPushButton;
 class QToolButton;
 
 /** 全屏框选 + 标注工具栏（矩形/椭圆/箭头/画笔/文字/撤销/取消/复制/AI问询）。 */
-class CaptureOverlay : public QWidget
-{
+class CaptureOverlay : public QWidget {
     Q_OBJECT
 public:
-    explicit CaptureOverlay(const QPixmap &screenshot, bool fixedMode, int fixedW, int fixedH,
-                            QWidget *parent = nullptr);
+    explicit CaptureOverlay(const QPixmap& screenshot,
+                            bool fixedMode,
+                            int fixedW,
+                            int fixedH,
+                            QWidget* parent = nullptr);
 
 signals:
-    void finished(const QPixmap &image, bool sendAi);
+    void finished(const QPixmap& image, bool sendAi);
     void cancelled();
 
 protected:
-    void paintEvent(QPaintEvent *event) override;
-    void mousePressEvent(QMouseEvent *event) override;
-    void mouseMoveEvent(QMouseEvent *event) override;
-    void mouseReleaseEvent(QMouseEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     enum class Tool { None, Rect, Ellipse, Arrow, Pen, Text };
@@ -54,27 +56,29 @@ private:
     };
 
     QRect selectionRect() const;
-    QPoint clampToSelection(const QPoint &p) const;
+    QPoint clampToSelection(const QPoint& p) const;
     QPixmap renderResult() const;
     void showToolbar();
     void hideToolbar();
     void confirm(bool sendAi);
     void setTool(Tool tool);
-    void onToolClicked(const QString &key);
+    void onToolClicked(const QString& key);
     void undoLast();
     void commitTextEntry();
-    void placeTextEntry(const QPoint &pos);
-    void drawAnnotation(QPainter &p, const Annotation &a, const QPoint &origin = {}) const;
-    void drawArrow(QPainter &p, const QPoint &from, const QPoint &to) const;
+    void placeTextEntry(const QPoint& pos);
+    void drawAnnotation(QPainter& p, const Annotation& a, const QPoint& origin = {}) const;
+    void drawArrow(QPainter& p, const QPoint& from, const QPoint& to) const;
+    /** 选区确定前：鼠标左下角的放大镜 + 坐标/像素颜色（选区确定后不绘制） */
+    void drawMagnifierInfo(QPainter& p) const;
     void updateToolHighlights();
     void updateCursor();
-    ResizeHandle hitTestHandle(const QPoint &pos) const;
+    ResizeHandle hitTestHandle(const QPoint& pos) const;
     QPoint handleCenter(ResizeHandle handle) const;
-    QRect resizedSelection(ResizeHandle handle, const QPoint &pos) const;
-    QRect movedSelection(const QPoint &delta) const;
-    void offsetAnnotations(const QPoint &delta);
+    QRect resizedSelection(ResizeHandle handle, const QPoint& pos) const;
+    QRect movedSelection(const QPoint& delta) const;
+    void offsetAnnotations(const QPoint& delta);
     static Qt::CursorShape cursorForHandle(ResizeHandle handle);
-    static QIcon loadToolIcon(const QString &key);
+    static QIcon loadToolIcon(const QString& key);
 
     QPixmap m_screenshot;
     bool m_fixedMode = false;
@@ -95,6 +99,8 @@ private:
     QPoint m_moveOrigin;
     QRect m_moveStartSel;
     bool m_pointerInSelection = false;
+    QPoint m_mousePos;
+    bool m_hasMousePos = false;
 
     Tool m_tool = Tool::None;
     bool m_drawing = false;
@@ -103,8 +109,8 @@ private:
     QVector<QPoint> m_penPath;
     QVector<Annotation> m_annotations;
 
-    QWidget *m_toolbar = nullptr;
-    QHash<QString, QToolButton *> m_toolButtons;
-    QLineEdit *m_textEntry = nullptr;
+    QWidget* m_toolbar = nullptr;
+    QHash<QString, QToolButton*> m_toolButtons;
+    QLineEdit* m_textEntry = nullptr;
     QPoint m_textPos;
 };

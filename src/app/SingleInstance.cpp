@@ -3,14 +3,9 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 
-SingleInstance::SingleInstance(QObject *parent)
-    : QObject(parent)
-    , m_shm(shmKey())
-{
-}
+SingleInstance::SingleInstance(QObject* parent) : QObject(parent), m_shm(shmKey()) {}
 
-SingleInstance::~SingleInstance()
-{
+SingleInstance::~SingleInstance() {
     if (m_server) {
         m_server->close();
         QLocalServer::removeServer(serverName());
@@ -19,18 +14,15 @@ SingleInstance::~SingleInstance()
         m_shm.detach();
 }
 
-QString SingleInstance::serverName()
-{
+QString SingleInstance::serverName() {
     return QStringLiteral("Cheet_SingleInstance_IPC");
 }
 
-QString SingleInstance::shmKey()
-{
+QString SingleInstance::shmKey() {
     return QStringLiteral("Cheet_SingleInstance_SHM");
 }
 
-bool SingleInstance::tryRunAsPrimary()
-{
+bool SingleInstance::tryRunAsPrimary() {
     // 尝试连接已有实例
     {
         QLocalSocket sock;
@@ -79,10 +71,9 @@ bool SingleInstance::tryRunAsPrimary()
     return true;
 }
 
-void SingleInstance::onNewConnection()
-{
+void SingleInstance::onNewConnection() {
     while (m_server && m_server->hasPendingConnections()) {
-        QLocalSocket *client = m_server->nextPendingConnection();
+        QLocalSocket* client = m_server->nextPendingConnection();
         if (!client)
             continue;
         connect(client, &QLocalSocket::readyRead, this, [this, client]() {
