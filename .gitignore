@@ -15,6 +15,7 @@ cheetahClip-Setup-*.exe
 Cheet-Setup-*.exe
 
 # IDE / local
+.cursor/
 .vscode/
 .idea/
 *.user

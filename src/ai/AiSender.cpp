@@ -117,6 +117,12 @@ void AiSender::sendAsync(const Settings& settings, const QPixmap& image) {
         const bool ok = self->sendSync(settings, image);
         if (!self)
             return;
+        // 无论成功/拦截/中断：结束时统一把截图以完整格式留在剪贴板
+        // （PNG/DIB 能粘图、CF_HDROP 能在桌面/文件夹粘出文件）
+        if (!runOnGuiThread([image]() { ClipboardImage::copyForPaste(image); }))
+            qWarning("AiSender: final clipboard restore failed");
+        if (!self)
+            return;
         QMetaObject::invokeMethod(
             self.data(),
             [self, ok]() {
@@ -288,6 +294,14 @@ bool AiSender::pastePromptAndSend(const Settings& settings,
         });
     };
 
+    // 给用户保留的最终剪贴板：始终用完整格式（PNG/DIB + CF_HDROP），
+    // 这样既能粘图片到应用里，也能在桌面/文件夹里直接粘出 PNG 文件。
+    // 注意与 restoreClipImage 区分：贴图进网页前必须用不带 CF_HDROP 的网页格式，
+    // 否则豆包等网页会走文件路径而非图片上传。
+    auto restoreClipImageFull = [&]() {
+        return runOnGuiThread([image]() { ClipboardImage::copyForPaste(image); });
+    };
+
     UiaComposer::enableWebAccessibility(hwnd);
     WinInput::setForeground(hwnd);
 
@@ -412,6 +426,10 @@ bool AiSender::pastePromptAndSend(const Settings& settings,
         WinInput::setForeground(hwnd);
         WinInput::sendCtrlKey('V');
         WinInput::sleepMs(450);
+        // 文字已进输入框，剪贴板不再需要：立即把截图以完整格式恢复回去，
+        // 发送完成后用户剪贴板里是图片+文件，既能粘图也能粘到桌面/文件夹
+        if (!restoreClipImageFull())
+            qWarning("AiSender: restore image clipboard after text paste failed");
         if (abortIfGone())
             return false;
         WinInput::sendEnter();
@@ -470,6 +488,10 @@ bool AiSender::pastePromptAndSend(const Settings& settings,
     WinInput::setForeground(hwnd);
     WinInput::sendCtrlKey('V');
     WinInput::sleepMs(300);
+    // 文字已进输入框，剪贴板不再需要：立即把截图以完整格式恢复回去，
+    // 发送完成后用户剪贴板里是图片+文件，既能粘图也能粘到桌面/文件夹
+    if (!restoreClipImageFull())
+        qWarning("AiSender: restore image clipboard after text paste failed");
     if (abortIfGone())
         return false;
 
