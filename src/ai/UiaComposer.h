@@ -29,16 +29,29 @@ enum class ImagePasteResult {
 #ifdef Q_OS_WIN
 void enableWebAccessibility(HWND hwnd);
 bool focusComposer(HWND hwnd, const QString& site);
+/** 是否真的找到了输入框控件（区别于坐标盲点：页面没渲染完时返回 false）。 */
+bool composerPresent(HWND hwnd, const QString& site);
 State scan(HWND hwnd, const QString& site);
 /** 全窗探测附件数与限制文案（含 toast/对话框）。 */
 State probeWindow(HWND hwnd);
 bool waitAttachmentAdded(HWND hwnd, const QString& site, int before, int timeoutMs = 4000);
-/** 粘贴图片后等待：确认附上 / 发现限制 / 超时失败。 */
+/** 粘贴图片后等待：确认附上 / 发现限制 / 超时失败。
+ *  「已贴上」只认输入区（scan）附件数超过 beforeAttachments；全窗计数含
+ *  弹窗/历史图片，绝不作为贴上依据，仅借它探测限制文案。
+ *  beforeWindowAttachments 为历史参数，已不参与判定。 */
 ImagePasteResult waitImagePasteResult(HWND hwnd,
                                       const QString& site,
                                       int beforeAttachments,
-                                      int timeoutMs = 8000);
-bool waitUntilUploaded(HWND hwnd, const QString& site, int minWaitMs, int maxWaitMs = 120000);
+                                      int timeoutMs = 8000,
+                                      int beforeWindowAttachments = -1);
+/** 等图片上传完成。expectedAttachments>=0 时监测附件是否被用户删除：
+ *  连续两轮扫描附件数低于期望值则置 *attachmentRemoved 并立即返回 false。 */
+bool waitUntilUploaded(HWND hwnd,
+                       const QString& site,
+                       int minWaitMs,
+                       int maxWaitMs = 120000,
+                       int expectedAttachments = -1,
+                       bool* attachmentRemoved = nullptr);
 bool messageSent(HWND hwnd, const QString& site, const QString& prompt);
 void clearComposer(HWND hwnd, const QString& site);
 #endif

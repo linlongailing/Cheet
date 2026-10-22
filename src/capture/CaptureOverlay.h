@@ -68,6 +68,10 @@ private:
     void placeTextEntry(const QPoint& pos);
     void drawAnnotation(QPainter& p, const Annotation& a, const QPoint& origin = {}) const;
     void drawArrow(QPainter& p, const QPoint& from, const QPoint& to) const;
+    /** 命中已画标注的边框（矩形/椭圆/箭头/文字），返回下标（上层优先），无命中 -1 */
+    int hitTestAnnotation(const QPoint& pos) const;
+    /** 标注的外接框（拖动时用于把移动范围夹在选区内） */
+    QRect annotationBounds(const Annotation& a) const;
     /** 选区确定前：鼠标左下角的放大镜 + 坐标/像素颜色（选区确定后不绘制） */
     void drawMagnifierInfo(QPainter& p) const;
     void updateToolHighlights();
@@ -108,6 +112,9 @@ private:
     QPoint m_drawCurrent;
     QVector<QPoint> m_penPath;
     QVector<Annotation> m_annotations;
+    int m_hoverAnnIndex = -1;  // 悬停命中的标注（边框上显示可拖拽光标）
+    int m_movingAnnIndex = -1; // 正在拖动移动的标注
+    QPoint m_annDragLast;      // 拖动标注时上一帧鼠标位置
 
     QWidget* m_toolbar = nullptr;
     QHash<QString, QToolButton*> m_toolButtons;

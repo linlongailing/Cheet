@@ -229,6 +229,90 @@ struct ComposerPick {
     bool isDocument = false;
 };
 
+bool findAllCached(IUIAutomationElement* root,
+                   IUIAutomationCondition* condition,
+                   const QList<PROPERTYID>& props,
+                   QList<IUIAutomationElement*>& out);
+IUIAutomationCondition* controlTypeCondition(CONTROLTYPEID id);
+
+/** 批量版输入框收集：一次 FindAll(Edit|Document) + 缓存属性本地打分，规则同 walkFindComposer */
+void findComposerHitsFast(IUIAutomationElement* root,
+                          const RECT& win,
+                          LONG contentTop,
+                          const QStringList& hints,
+                          QList<ComposerHit>& hits) {
+    IUIAutomation* uia = platform::UiaCore::instance().automation();
+    if (!uia || !root)
+        return;
+    IUIAutomationCondition* editCond = controlTypeCondition(UIA_EditControlTypeId);
+    IUIAutomationCondition* docCond = controlTypeCondition(UIA_DocumentControlTypeId);
+    IUIAutomationCondition* either = nullptr;
+    if (editCond && docCond)
+        uia->CreateOrCondition(editCond, docCond, &either);
+    if (editCond)
+        editCond->Release();
+    if (docCond)
+        docCond->Release();
+    if (!either)
+        return;
+    QList<IUIAutomationElement*> els;
+    const bool ok = findAllCached(root,
+                                  either,
+                                  {UIA_ControlTypePropertyId,
+                                   UIA_ClassNamePropertyId,
+                                   UIA_NamePropertyId,
+                                   UIA_BoundingRectanglePropertyId},
+                                  els);
+    either->Release();
+    if (!ok)
+        return;
+
+    const LONG winH = win.bottom - win.top;
+    const LONG winW = win.right - win.left;
+    for (IUIAutomationElement* el : els) {
+        CONTROLTYPEID ctype = 0;
+        RECT br{};
+        BSTR clsB = nullptr;
+        BSTR nameB = nullptr;
+        el->get_CachedControlType(&ctype);
+        el->get_CachedBoundingRectangle(&br);
+        el->get_CachedClassName(&clsB);
+        el->get_CachedName(&nameB);
+        const QString cls = clsB ? QString::fromWCharArray(clsB) : QString();
+        const QString name = nameB ? QString::fromWCharArray(nameB) : QString();
+        if (clsB)
+            SysFreeString(clsB);
+        if (nameB)
+            SysFreeString(nameB);
+
+        const bool isEdit = ctype == UIA_EditControlTypeId;
+        const bool isDoc = ctype == UIA_DocumentControlTypeId;
+        const LONG w = br.right - br.left;
+        const bool visible = w > 20 && (br.bottom - br.top) > 8;
+        const bool notOmni =
+            cls != QLatin1String("OmniboxViewViews") && cls != QLatin1String("urlbar-input");
+        const bool docOk =
+            !isDoc || (w >= winW * 0.35 && br.bottom >= win.top + static_cast<LONG>(winH * 0.55));
+        bool keep = false;
+        if ((isEdit || isDoc) && visible && notOmni && docOk &&
+            br.top > contentTop - (isDoc ? 80 : 0) && br.left >= win.left - 2 &&
+            br.right <= win.right + 8) {
+            const QString text = norm(name + QLatin1Char(' ') + cls);
+            if (!containsAny(text, kSkillClickAvoid)) {
+                ComposerHit hit;
+                hit.el = el; // 所有权转移给 hits
+                hit.matched = (isDoc ? 2 : 0) + (containsAny(text, hints) ? 0 : 1);
+                hit.bottom = br.bottom;
+                hit.isDocument = isDoc;
+                hits.push_back(hit);
+                keep = true;
+            }
+        }
+        if (!keep)
+            el->Release();
+    }
+}
+
 ComposerPick findComposerPick(HWND hwnd, const QString& site) {
     ComposerPick pick;
     auto root = platform::UiaCore::instance().elementFromHwnd(hwnd);
@@ -237,7 +321,10 @@ ComposerPick findComposerPick(HWND hwnd, const QString& site) {
     const RECT win = windowRect(hwnd);
     const LONG contentTop = win.top + 80;
     QList<ComposerHit> hits;
-    walkFindComposer(root.get(), win, contentTop, SiteCatalog::composerHints(site), 0, hits);
+    // 先批量找；一无所获再逐节点走（个别壳的 UIA 实现 FindAll 不全时兜底）
+    findComposerHitsFast(root.get(), win, contentTop, SiteCatalog::composerHints(site), hits);
+    if (hits.isEmpty())
+        walkFindComposer(root.get(), win, contentTop, SiteCatalog::composerHints(site), 0, hits);
     if (hits.isEmpty())
         return pick;
     std::sort(hits.begin(), hits.end(), [](const ComposerHit& a, const ComposerHit& b) {
@@ -284,6 +371,37 @@ IUIAutomationElement* composerContainer(IUIAutomationElement* composer, HWND hwn
     return container;
 }
 
+/** 单个节点的扫描判定（walker 与批量 FindAll 共用，只依赖节点自身属性） */
+void processScanNode(CONTROLTYPEID ctype,
+                     const RECT& br,
+                     const QString& rawName,
+                     BOOL enabled,
+                     State& state,
+                     LONG& sendBottom,
+                     int& removeButtons,
+                     int& thumbnails,
+                     bool detectBlocks) {
+    if ((br.right - br.left) <= 0 || (br.bottom - br.top) <= 0)
+        return;
+    const QString name = norm(rawName);
+    if (detectBlocks && looksLikeImageBlock(name))
+        state.imageBlocked = true;
+    if (ctype == UIA_ProgressBarControlTypeId ||
+        (name.size() <= 40 && containsAny(name, kUploadingHints))) {
+        state.uploading = true;
+    }
+    if (ctype == UIA_ButtonControlTypeId && containsAny(name, kRemoveHints))
+        removeButtons++;
+    if (ctype == UIA_ImageControlTypeId && (br.right - br.left) >= 24 && (br.bottom - br.top) >= 24)
+        thumbnails++;
+    if (ctype == UIA_ButtonControlTypeId && name.size() <= 40 && containsAny(name, kSendHints) &&
+        br.bottom > sendBottom) {
+        sendBottom = br.bottom;
+        state.sendFound = true;
+        state.sendEnabled = enabled;
+    }
+}
+
 void scanTree(IUIAutomationElement* el,
               int depth,
               State& state,
@@ -299,42 +417,20 @@ void scanTree(IUIAutomationElement* el,
     el->get_CurrentControlType(&ctype);
     RECT br{};
     el->get_CurrentBoundingRectangle(&br);
-    const bool inRegion = (br.right - br.left > 0) && (br.bottom - br.top > 0);
-    if (inRegion) {
-        BSTR nameB = nullptr;
-        BSTR helpB = nullptr;
-        el->get_CurrentName(&nameB);
-        el->get_CurrentHelpText(&helpB);
-        QString name =
-            norm((nameB ? QString::fromWCharArray(nameB) : QString()) + QLatin1Char(' ') +
-                 (helpB ? QString::fromWCharArray(helpB) : QString()));
-        if (nameB)
-            SysFreeString(nameB);
-        if (helpB)
-            SysFreeString(helpB);
-
-        BOOL enabled = TRUE;
-        el->get_CurrentIsEnabled(&enabled);
-
-        if (detectBlocks && looksLikeImageBlock(name))
-            state.imageBlocked = true;
-
-        if (ctype == UIA_ProgressBarControlTypeId ||
-            (name.size() <= 40 && containsAny(name, kUploadingHints))) {
-            state.uploading = true;
-        }
-        if (ctype == UIA_ButtonControlTypeId && containsAny(name, kRemoveHints))
-            removeButtons++;
-        if (ctype == UIA_ImageControlTypeId && (br.right - br.left) >= 24 &&
-            (br.bottom - br.top) >= 24)
-            thumbnails++;
-        if (ctype == UIA_ButtonControlTypeId && name.size() <= 40 &&
-            containsAny(name, kSendHints) && br.bottom > sendBottom) {
-            sendBottom = br.bottom;
-            state.sendFound = true;
-            state.sendEnabled = enabled;
-        }
-    }
+    BSTR nameB = nullptr;
+    BSTR helpB = nullptr;
+    el->get_CurrentName(&nameB);
+    el->get_CurrentHelpText(&helpB);
+    const QString rawName = (nameB ? QString::fromWCharArray(nameB) : QString()) +
+                            QLatin1Char(' ') + (helpB ? QString::fromWCharArray(helpB) : QString());
+    if (nameB)
+        SysFreeString(nameB);
+    if (helpB)
+        SysFreeString(helpB);
+    BOOL enabled = TRUE;
+    el->get_CurrentIsEnabled(&enabled);
+    processScanNode(
+        ctype, br, rawName, enabled, state, sendBottom, removeButtons, thumbnails, detectBlocks);
 
     IUIAutomationTreeWalker* w = walker();
     if (!w)
@@ -348,6 +444,111 @@ void scanTree(IUIAutomationElement* el,
         w->GetNextSiblingElement(child, &next);
         child->Release();
         child = next;
+    }
+}
+
+IUIAutomationCondition* controlTypeCondition(CONTROLTYPEID id) {
+    IUIAutomation* uia = platform::UiaCore::instance().automation();
+    if (!uia)
+        return nullptr;
+    VARIANT var;
+    VariantInit(&var);
+    var.vt = VT_I4;
+    var.lVal = id;
+    IUIAutomationCondition* cond = nullptr;
+    uia->CreatePropertyCondition(UIA_ControlTypePropertyId, var, &cond);
+    VariantClear(&var);
+    return cond;
+}
+
+/**
+ * 批量拉取后代元素并预取属性到缓存：一次 FindAllBuildCache 顶过去逐节点跨进程
+ * 往返（Gemini 这类 3000+ 节点的页面，逐个 GetFirstChild/属性读取是主要耗时）。
+ * 返回的元素所有权归调用方（逐个 Release）；失败返回 false 由调用方走 walker 兜底。
+ */
+bool findAllCached(IUIAutomationElement* root,
+                   IUIAutomationCondition* condition,
+                   const QList<PROPERTYID>& props,
+                   QList<IUIAutomationElement*>& out) {
+    IUIAutomation* uia = platform::UiaCore::instance().automation();
+    if (!uia || !root || !condition)
+        return false;
+    IUIAutomationCacheRequest* cache = nullptr;
+    if (FAILED(uia->CreateCacheRequest(&cache)) || !cache)
+        return false;
+    for (PROPERTYID prop : props)
+        cache->AddProperty(prop);
+    IUIAutomationElementArray* arr = nullptr;
+    const HRESULT hr = root->FindAllBuildCache(TreeScope_Descendants, condition, cache, &arr);
+    cache->Release();
+    if (FAILED(hr) || !arr)
+        return false;
+    int len = 0;
+    arr->get_Length(&len);
+    for (int i = 0; i < len; ++i) {
+        IUIAutomationElement* el = nullptr;
+        if (SUCCEEDED(arr->GetElement(i, &el)) && el)
+            out.push_back(el);
+    }
+    arr->Release();
+    return !out.isEmpty();
+}
+
+/** 扁平扫描整个子树：批量取全部后代 + 缓存属性本地判定。失败回退 walker 版 scanTree */
+void scanSubtree(IUIAutomationElement* rootEl,
+                 State& state,
+                 LONG& sendBottom,
+                 int& removeButtons,
+                 int& thumbnails,
+                 int maxDepth,
+                 bool detectBlocks) {
+    IUIAutomation* uia = platform::UiaCore::instance().automation();
+    IUIAutomationCondition* trueCond = nullptr;
+    if (uia)
+        uia->CreateTrueCondition(&trueCond);
+    QList<IUIAutomationElement*> els;
+    const bool ok = trueCond && findAllCached(rootEl,
+                                              trueCond,
+                                              {UIA_ControlTypePropertyId,
+                                               UIA_BoundingRectanglePropertyId,
+                                               UIA_NamePropertyId,
+                                               UIA_HelpTextPropertyId,
+                                               UIA_IsEnabledPropertyId},
+                                              els);
+    if (trueCond)
+        trueCond->Release();
+    if (!ok) {
+        scanTree(rootEl, 0, state, sendBottom, removeButtons, thumbnails, maxDepth, detectBlocks);
+        return;
+    }
+    for (IUIAutomationElement* el : els) {
+        CONTROLTYPEID ctype = 0;
+        RECT br{};
+        BOOL enabled = TRUE;
+        BSTR nameB = nullptr;
+        BSTR helpB = nullptr;
+        el->get_CachedControlType(&ctype);
+        el->get_CachedBoundingRectangle(&br);
+        el->get_CachedIsEnabled(&enabled);
+        el->get_CachedName(&nameB);
+        el->get_CachedHelpText(&helpB);
+        const QString rawName = (nameB ? QString::fromWCharArray(nameB) : QString()) +
+                                QLatin1Char(' ') +
+                                (helpB ? QString::fromWCharArray(helpB) : QString());
+        if (nameB)
+            SysFreeString(nameB);
+        if (helpB)
+            SysFreeString(helpB);
+        processScanNode(ctype,
+                        br,
+                        rawName,
+                        enabled,
+                        state,
+                        sendBottom,
+                        removeButtons,
+                        thumbnails,
+                        detectBlocks);
+        el->Release();
     }
 }
 
@@ -515,7 +716,7 @@ bool focusComposer(HWND hwnd, const QString& site) {
         if (!ClientToScreen(hwnd, &pt))
             return false;
         clickPoint(static_cast<int>(pt.x), static_cast<int>(pt.y));
-        WinInput::sleepMs(220);
+        WinInput::sleepMs(120);
         return true;
     };
 
@@ -529,7 +730,7 @@ bool focusComposer(HWND hwnd, const QString& site) {
         pick.el->Release();
         if (focused && !simpleShell) {
             // ChatGPT/Claude/Gemini：SetFocus 通常足够，避免再点
-            WinInput::sleepMs(120);
+            WinInput::sleepMs(60);
             return true;
         }
         if (SUCCEEDED(hr) && br.right > br.left && br.bottom > br.top) {
@@ -542,16 +743,25 @@ bool focusComposer(HWND hwnd, const QString& site) {
             else if (simpleShell)
                 cy = br.bottom - qMax(12L, h / 5);
             clickPoint(cx, qMax(br.top + 8, cy));
-            WinInput::sleepMs(160);
+            WinInput::sleepMs(100);
             return true;
         }
         if (focused) {
-            WinInput::sleepMs(120);
+            WinInput::sleepMs(60);
             return true;
         }
     }
 
     return clickClientComposer();
+}
+
+bool composerPresent(HWND hwnd, const QString& site) {
+    enableWebAccessibility(hwnd);
+    IUIAutomationElement* composer = findComposerCtrl(hwnd, site);
+    if (!composer)
+        return false;
+    composer->Release();
+    return true;
 }
 
 State scan(HWND hwnd, const QString& site) {
@@ -569,7 +779,7 @@ State scan(HWND hwnd, const QString& site) {
     LONG sendBottom = -1;
     int removeButtons = 0;
     int thumbnails = 0;
-    scanTree(container, 0, state, sendBottom, removeButtons, thumbnails, 30, true);
+    scanSubtree(container, state, sendBottom, removeButtons, thumbnails, 30, true);
     state.attachments = qMax(removeButtons, thumbnails);
     container->Release();
     return state;
@@ -585,7 +795,7 @@ State probeWindow(HWND hwnd) {
     int removeButtons = 0;
     int thumbnails = 0;
     // 全窗扫限制文案 + 附件缩略图（深度稍浅，控耗时）
-    scanTree(root.get(), 0, state, sendBottom, removeButtons, thumbnails, 24, true);
+    scanSubtree(root.get(), state, sendBottom, removeButtons, thumbnails, 24, true);
     state.attachments = qMax(removeButtons, thumbnails);
     state.composerFound = true;
     return state;
@@ -617,33 +827,44 @@ bool waitAttachmentAdded(HWND hwnd, const QString& site, int before, int timeout
 ImagePasteResult waitImagePasteResult(HWND hwnd,
                                       const QString& site,
                                       int beforeAttachments,
-                                      int timeoutMs) {
+                                      int timeoutMs,
+                                      int beforeWindowAttachments) {
     Q_UNUSED(site);
     if (!platform::windowAlive(hwnd))
         return ImagePasteResult::WindowGone;
 
+    // 判定口径：只认输入区（scan）附件数超过贴图前基线才算贴上。全窗计数绝不
+    // 作为「已贴上」的依据——网站弹限制/登录/升级弹窗时弹窗里也有图片，全窗数
+    // 会自己涨，曾把「被限制」误判成「已贴上」导致只发文字。全窗只查限制文案
+    Q_UNUSED(beforeWindowAttachments);
     const ULONGLONG deadline = GetTickCount64() + static_cast<ULONGLONG>(qMax(2000, timeoutMs));
     bool sawUpload = false;
+    int iter = 0;
     while (GetTickCount64() < deadline) {
         if (!platform::windowAlive(hwnd))
             return ImagePasteResult::WindowGone;
-        WinInput::sleepMs(350);
-        if (!platform::windowAlive(hwnd))
-            return ImagePasteResult::WindowGone;
 
+        // 提速：全窗探测（probeWindow）很贵，Gemini 这类重页面一次全树扫描要数秒；
+        // 每 3 轮才做一次（toast/限制文案靠它兜底），其余轮次只扫输入区
         State st = scan(hwnd, site);
-        State win = probeWindow(hwnd);
+        State win;
+        if (iter % 3 == 0)
+            win = probeWindow(hwnd);
+        ++iter;
         if (st.imageBlocked || win.imageBlocked)
             return ImagePasteResult::Blocked;
         if (st.uploading || win.uploading)
             sawUpload = true;
-        const int att = qMax(st.attachments, win.attachments);
-        if (att > beforeAttachments)
+        if (st.attachments > beforeAttachments)
             return ImagePasteResult::Ok;
         // 出现过上传中且已结束、附件仍未增加：可能被拒
         if (sawUpload && !st.uploading && !win.uploading && GetTickCount64() + 800 >= deadline) {
             break;
         }
+        // 先查再等：贴图往往几十毫秒就附上，第一轮立即查能省一个轮询间隔
+        if (!platform::windowAlive(hwnd))
+            return ImagePasteResult::WindowGone;
+        WinInput::sleepMs(200);
     }
 
     // 超时前最后扫一次限制文案
@@ -652,30 +873,48 @@ ImagePasteResult waitImagePasteResult(HWND hwnd,
     const State last = probeWindow(hwnd);
     if (last.imageBlocked)
         return ImagePasteResult::Blocked;
-    if (last.attachments > beforeAttachments)
+    if (scan(hwnd, site).attachments > beforeAttachments)
         return ImagePasteResult::Ok;
     return ImagePasteResult::Failed;
 }
 
-bool waitUntilUploaded(HWND hwnd, const QString& site, int minWaitMs, int maxWaitMs) {
+bool waitUntilUploaded(HWND hwnd,
+                       const QString& site,
+                       int minWaitMs,
+                       int maxWaitMs,
+                       int expectedAttachments,
+                       bool* attachmentRemoved) {
     qDebug() << "UIA wait upload min=" << minWaitMs << "max=" << maxWaitMs;
+    if (attachmentRemoved)
+        *attachmentRemoved = false;
     if (!platform::windowAlive(hwnd))
         return false;
     const ULONGLONG start = GetTickCount64();
-    WinInput::sleepMs(800);
-    if (!platform::windowAlive(hwnd))
-        return false;
     const ULONGLONG deadline = start + static_cast<ULONGLONG>(qMax(10000, maxWaitMs));
-    int readyStreak = 0;
+    int removedStreak = 0;
 
+    // 提速：不再起步先睡、不再每轮附带一遍全窗探测（scan 本身已扫全树并带限制文案
+    // 检测）、一次「发送可用且非上传中」即认定完成，不再要求连续两次 + 额外等待。
+    // 全树扫描本身就耗时，少扫一轮通常省 1~3 秒。
     while (GetTickCount64() < deadline) {
         if (!platform::windowAlive(hwnd)) {
             qDebug() << "UIA upload wait aborted: window closed";
             return false;
         }
         const State st = scan(hwnd, site);
-        if (st.imageBlocked || probeWindow(hwnd).imageBlocked)
+        if (st.imageBlocked)
             return false;
+        // 已上传图片被用户删除：连续两轮附件数不足才判定，避免单次扫描抖动误杀
+        if (expectedAttachments >= 0 && st.attachments < expectedAttachments) {
+            if (++removedStreak >= 2) {
+                qDebug() << "UIA upload wait: attachment removed by user";
+                if (attachmentRemoved)
+                    *attachmentRemoved = true;
+                return false;
+            }
+        } else {
+            removedStreak = 0;
+        }
         const int elapsed = static_cast<int>(GetTickCount64() - start);
         bool ready = false;
         if (st.sendFound)
@@ -683,15 +922,12 @@ bool waitUntilUploaded(HWND hwnd, const QString& site, int minWaitMs, int maxWai
         else
             ready = !st.uploading && elapsed >= minWaitMs;
 
-        readyStreak = ready ? readyStreak + 1 : 0;
-        if (readyStreak >= 2) {
+        if (ready) {
             qDebug() << "UIA upload ready after" << elapsed << "ms"
                      << "attachments=" << st.attachments << "send=" << st.sendEnabled;
-            WinInput::sleepMs(300);
             return true;
         }
-        // 就绪前稍拉长间隔，降低全树扫描频率
-        WinInput::sleepMs(ready ? 450 : 700);
+        WinInput::sleepMs(200);
     }
     qDebug() << "UIA upload wait timeout";
     return false;
@@ -739,7 +975,7 @@ void clearComposer(HWND hwnd, const QString& site) {
     in[1] = in[0];
     in[1].ki.dwFlags = KEYEVENTF_KEYUP;
     SendInput(2, in, sizeof(INPUT));
-    WinInput::sleepMs(200);
+    WinInput::sleepMs(120);
 }
 
 #endif

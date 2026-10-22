@@ -223,66 +223,83 @@ IUIAutomationElement* findEditByNames(IUIAutomationElement* el,
     return nullptr;
 }
 
-/** 不切换标签，只读 UIA 元数据（标题/帮助/值/描述） */
-QString tabProbeText(IUIAutomationElement* el) {
-    if (!el)
+/**
+ * 批量读地址栏：一次 FindAll(Edit) + 缓存属性（名称/位置/值），挑名称命中或
+ * 「位置最靠上且值像 URL」的输入框。逐节点走大页面找地址栏太慢时用这个。
+ */
+QString findAddressUrlFast(IUIAutomationElement* root, const QStringList& names) {
+    IUIAutomation* uia = platform::UiaCore::instance().automation();
+    if (!uia || !root)
         return {};
-    QStringList parts;
-    parts << nameOf(el) << valueOf(el);
-
-    BSTR helpB = nullptr;
-    el->get_CurrentHelpText(&helpB);
-    if (helpB) {
-        parts << QString::fromWCharArray(helpB);
-        SysFreeString(helpB);
+    VARIANT var;
+    VariantInit(&var);
+    var.vt = VT_I4;
+    var.lVal = UIA_EditControlTypeId;
+    IUIAutomationCondition* cond = nullptr;
+    uia->CreatePropertyCondition(UIA_ControlTypePropertyId, var, &cond);
+    VariantClear(&var);
+    if (!cond)
+        return {};
+    IUIAutomationCacheRequest* cache = nullptr;
+    if (FAILED(uia->CreateCacheRequest(&cache)) || !cache) {
+        cond->Release();
+        return {};
     }
+    cache->AddProperty(UIA_NamePropertyId);
+    cache->AddProperty(UIA_BoundingRectanglePropertyId);
+    IUIAutomationElementArray* arr = nullptr;
+    const HRESULT hr = root->FindAllBuildCache(TreeScope_Descendants, cond, cache, &arr);
+    cond->Release();
+    cache->Release();
+    if (FAILED(hr) || !arr)
+        return {};
 
-    IUIAutomationLegacyIAccessiblePattern* leg = nullptr;
-    if (SUCCEEDED(el->GetCurrentPatternAs(UIA_LegacyIAccessiblePatternId,
-                                          IID_IUIAutomationLegacyIAccessiblePattern,
-                                          reinterpret_cast<void**>(&leg))) &&
-        leg) {
-        BSTR desc = nullptr;
-        BSTR val = nullptr;
-        leg->get_CurrentDescription(&desc);
-        leg->get_CurrentValue(&val);
-        if (desc) {
-            parts << QString::fromWCharArray(desc);
-            SysFreeString(desc);
+    QString bestUrl;
+    LONG bestTop = 0;
+    bool haveCandidate = false;
+    int len = 0;
+    arr->get_Length(&len);
+    for (int i = 0; i < len; ++i) {
+        IUIAutomationElement* el = nullptr;
+        if (FAILED(arr->GetElement(i, &el)) || !el)
+            continue;
+        BSTR nameB = nullptr;
+        RECT br{};
+        el->get_CachedName(&nameB);
+        el->get_CachedBoundingRectangle(&br);
+        const QString name = nameB ? QString::fromWCharArray(nameB) : QString();
+        if (nameB)
+            SysFreeString(nameB);
+        // 候选：名称是地址栏，或形状像地址栏（宽、矮的单行框）。候选很少，
+        // 逐个读当前值即可，不必把每个 Edit 都跨进程读一遍
+        const bool named = names.contains(name);
+        const LONG w = br.right - br.left;
+        const LONG h = br.bottom - br.top;
+        const QString val = (named || (w > 200 && h >= 12 && h <= 60)) ? valueOf(el) : QString();
+        el->Release();
+        if (val.isEmpty())
+            continue;
+        if (named) {
+            arr->Release();
+            return val;
         }
-        if (val) {
-            parts << QString::fromWCharArray(val);
-            SysFreeString(val);
+        if (looksLikeUrl(val) && (!haveCandidate || br.top < bestTop)) {
+            haveCandidate = true;
+            bestTop = br.top;
+            bestUrl = val;
         }
-        leg->Release();
     }
-    return parts.join(QLatin1Char(' ')).toLower();
-}
-
-int scoreTabProbe(const QString& probe, const QString& site) {
-    if (probe.isEmpty())
-        return 0;
-    int score = 0;
-    for (const QString& h : SiteCatalog::urlHints(site)) {
-        if (probe.contains(h))
-            score += 20;
-    }
-    for (const QString& h : SiteCatalog::searchKeywords(site)) {
-        if (probe.contains(h.toLower()))
-            score += 15;
-    }
-    for (const QString& h : SiteCatalog::tabTitleHints(site)) {
-        if (probe.contains(h))
-            score += 10;
-    }
-    return score;
+    arr->Release();
+    return bestUrl;
 }
 
 /**
- * 静默搜标签：只扫 UIA，不 Ctrl+Tab / 不弹标签搜索框。
- * 命中后只激活一次目标标签；失败返回 false（由上层新开页）。
+ * 按网址搜标签（所有浏览器同一逻辑）：标签元素本身不暴露 URL（只有标题，
+ * 对话页标题常不含站点名，靠标题匹配必然漏检），所以逐个静默激活标签
+ * （UIA Select，不动鼠标/键盘）、读地址栏 URL 与目标站比对，找到即停。
+ * 调用方已确认当前选中标签的 URL 不是目标站，这里跳过它。
  */
-bool findAndActivateTargetTabSilent(HWND hwnd, const QString& site) {
+bool findAndActivateTargetTabByUrl(HWND hwnd, const QString& site) {
     auto root = platform::UiaCore::instance().elementFromHwnd(hwnd);
     if (!root)
         return false;
@@ -292,35 +309,45 @@ bool findAndActivateTargetTabSilent(HWND hwnd, const QString& site) {
     if (tabs.isEmpty())
         return false;
 
-    int bestIdx = -1;
-    int bestScore = 0;
-    for (int i = 0; i < tabs.size(); ++i) {
-        const QString probe = tabProbeText(tabs[i]);
-        const int score = scoreTabProbe(probe, site);
-        if (score > bestScore) {
-            bestScore = score;
-            bestIdx = i;
-        }
-        qDebug() << "BrowserNav silent tab[" << i << "] score=" << score << probe.left(80);
-    }
-
     bool ok = false;
-    if (bestIdx >= 0 && bestScore > 0) {
-        // 只切这一次，不遍历其它标签
-        if (!activateTabElement(tabs[bestIdx]))
-            focusTabByIndex(hwnd, bestIdx);
-        WinInput::sleepMs(400);
-        ok = isTargetUrl(readAddressBarUrl(hwnd), site);
-        if (!ok) {
-            // 标题误匹配时再等一瞬（地址栏刷新）
-            WinInput::sleepMs(350);
-            ok = isTargetUrl(readAddressBarUrl(hwnd), site);
+    for (int i = 0; i < tabs.size(); ++i) {
+        if (!platform::windowAlive(hwnd))
+            break;
+        IUIAutomationSelectionItemPattern* sel = nullptr;
+        BOOL isSelected = FALSE;
+        if (SUCCEEDED(tabs[i]->GetCurrentPatternAs(UIA_SelectionItemPatternId,
+                                                   IID_IUIAutomationSelectionItemPattern,
+                                                   reinterpret_cast<void**>(&sel))) &&
+            sel) {
+            sel->get_CurrentIsSelected(&isSelected);
+            sel->Release();
         }
-        qDebug() << "BrowserNav silent activate idx=" << bestIdx << "ok=" << ok;
+        if (isSelected)
+            continue;
+
+        if (!activateTabElement(tabs[i]))
+            focusTabByIndex(hwnd, i);
+        // 地址栏在切标签后很快刷新：先等一小段读一次，读不到再补一次
+        WinInput::sleepMs(180);
+        if (!platform::windowAlive(hwnd))
+            break;
+        QString url = readAddressBarUrl(hwnd);
+        if (url.isEmpty()) {
+            WinInput::sleepMs(300);
+            if (!platform::windowAlive(hwnd))
+                break;
+            url = readAddressBarUrl(hwnd);
+        }
+        qDebug() << "BrowserNav url-scan tab[" << i << "]" << url;
+        if (isTargetUrl(url, site)) {
+            ok = true;
+            break;
+        }
     }
 
     for (IUIAutomationElement* tab : tabs)
         tab->Release();
+    qDebug() << "BrowserNav url-scan done ok=" << ok;
     return ok;
 }
 
@@ -352,14 +379,6 @@ QString readAddressBarUrl(HWND hwnd) {
     if (!root)
         return {};
 
-    if (IUIAutomationElement* ff =
-            findByAutomationId(root.get(), QStringLiteral("urlbar-input"), 0)) {
-        QString v = valueOf(ff);
-        ff->Release();
-        if (!v.isEmpty())
-            return v;
-    }
-
     static const QStringList names = {
         QStringLiteral("地址和搜索栏"),
         QStringLiteral("Address and search bar"),
@@ -370,6 +389,20 @@ QString readAddressBarUrl(HWND hwnd) {
         QStringLiteral("使用 Google 搜索，或者输入网址"),
         QStringLiteral("搜索或输入网址"),
     };
+
+    // 先批量找（大页面快得多）；找不到再走旧的逐节点兜底
+    const QString fast = findAddressUrlFast(root.get(), names);
+    if (!fast.isEmpty())
+        return fast;
+
+    if (IUIAutomationElement* ff =
+            findByAutomationId(root.get(), QStringLiteral("urlbar-input"), 0)) {
+        QString v = valueOf(ff);
+        ff->Release();
+        if (!v.isEmpty())
+            return v;
+    }
+
     if (IUIAutomationElement* edit = findEditByNames(root.get(), names, 0)) {
         QString v = valueOf(edit);
         edit->Release();
@@ -390,11 +423,11 @@ bool selectTargetTabByUrl(HWND hwnd, const QString& browser, const QString& site
     if (isTargetUrl(cur, s))
         return true;
 
-    // 静默：UIA 读标签元数据找目标；命中只激活一次。找不到 → false，上层直接新开页
-    // 不再 Ctrl+PageDown 扫标签，也不弹 Ctrl+Shift+A 搜索框
+    // 按网址找：逐个静默激活标签读地址栏比对（不动鼠标/键盘，不弹标签搜索框）。
+    // 找不到 → false，上层直接新开页
     if (!platform::windowAlive(hwnd))
         return false;
-    return findAndActivateTargetTabSilent(hwnd, s);
+    return findAndActivateTargetTabByUrl(hwnd, s);
 }
 
 bool navigateCurrentTab(HWND hwnd, const QString& url) {
@@ -458,7 +491,7 @@ HWND focusOrOpenTarget(const QString& browser,
     }
 
     WinInput::setForeground(hwnd);
-    WinInput::sleepMs(150);
+    // 已打开的浏览器不空等：直接读标签，输入框等待在后续环节兜底
     if (!platform::windowAlive(hwnd))
         return nullptr;
 

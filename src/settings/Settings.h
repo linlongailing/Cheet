@@ -9,7 +9,6 @@ public:
     QString selectMode = QStringLiteral("free");
     int fixedWidth = 800;
     int fixedHeight = 600;
-    double pasteWaitSeconds = 2.0;
     QString promptText = QStringLiteral("详解图片内容");
     QString hotkey = QStringLiteral("alt+a");
     QString browser = QStringLiteral("edge");

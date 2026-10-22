@@ -108,7 +108,6 @@ QJsonObject Settings::toJson() const {
     o.insert(QStringLiteral("select_mode"), selectMode);
     o.insert(QStringLiteral("fixed_width"), fixedWidth);
     o.insert(QStringLiteral("fixed_height"), fixedHeight);
-    o.insert(QStringLiteral("paste_wait_seconds"), pasteWaitSeconds);
     o.insert(QStringLiteral("prompt_text"), promptText);
     o.insert(QStringLiteral("hotkey"), normalizedHotkey());
     o.insert(QStringLiteral("browser"), normalizedBrowser());
@@ -131,11 +130,6 @@ Settings Settings::fromJson(const QJsonObject& obj) {
     if (obj.contains(QStringLiteral("fixed_height")))
         s.fixedHeight =
             qBound(8, obj.value(QStringLiteral("fixed_height")).toInt(s.fixedHeight), 16384);
-    if (obj.contains(QStringLiteral("paste_wait_seconds")))
-        s.pasteWaitSeconds =
-            qBound(0.0,
-                   obj.value(QStringLiteral("paste_wait_seconds")).toDouble(s.pasteWaitSeconds),
-                   60.0);
     if (obj.contains(QStringLiteral("prompt_text")))
         s.promptText = obj.value(QStringLiteral("prompt_text")).toString(s.promptText);
     if (obj.contains(QStringLiteral("hotkey")))

@@ -3,6 +3,7 @@
 #include "i18n/I18n.h"
 
 #include <QCursor>
+#include <QFontMetrics>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -19,12 +20,32 @@
 namespace {
 constexpr QColor kAnnColor(255, 77, 79);
 constexpr int kAnnWidth = 2;
+constexpr int kAnnTextSize = 22; // 文字标注字号（输入框与绘制共用）
 constexpr int kHandleHit = 8;
 constexpr int kHandleRadius = 4;
 constexpr int kMinSel = 8;
 
 QString iconPath(const QString& key) {
     return QStringLiteral(":/qt/qml/CheetahClip/resources/icons/tools/%1.png").arg(key);
+}
+
+/** 点到线段的最短距离（标注边框命中判定用） */
+qreal distToSegment(const QPointF& p, const QPointF& a, const QPointF& b) {
+    const QPointF ab = b - a;
+    const qreal len2 = QPointF::dotProduct(ab, ab);
+    if (len2 <= 0.0)
+        return QLineF(p, a).length();
+    const qreal t = qBound(0.0, QPointF::dotProduct(p - a, ab) / len2, 1.0);
+    return QLineF(p, a + ab * t).length();
+}
+
+/** 箭头头部两个端点（与 drawArrow 的画法保持一致） */
+void arrowHeadPoints(const QPoint& from, const QPoint& to, QPointF& left, QPointF& right) {
+    const qreal angle = qAtan2(qreal(to.y() - from.y()), qreal(to.x() - from.x()));
+    const qreal size = 12.0;
+    constexpr qreal kPi = 3.14159265358979323846;
+    left = QPointF(to.x() - size * qCos(angle - kPi / 6), to.y() - size * qSin(angle - kPi / 6));
+    right = QPointF(to.x() - size * qCos(angle + kPi / 6), to.y() - size * qSin(angle + kPi / 6));
 }
 
 /** 截图准星光标（用户提供的准星图，热点在正中心）；加载失败回退系统十字 */
@@ -417,8 +438,18 @@ void CaptureOverlay::updateCursor() {
         setCursor(crosshairCursor());
         return;
     }
+    // 正在画标注（矩形/椭圆/箭头/画笔）时使用系统箭头，与选工具后的悬停状态一致
+    if (m_drawing) {
+        setCursor(Qt::ArrowCursor);
+        return;
+    }
     if (m_resizing || m_hoverHandle != ResizeHandle::None) {
         setCursor(cursorForHandle(m_resizing ? m_activeHandle : m_hoverHandle));
+        return;
+    }
+    // 悬停在已画标注边框上（或正在拖动它）：四向移动光标，提示可拖拽
+    if (m_movingAnnIndex >= 0 || m_hoverAnnIndex >= 0) {
+        setCursor(Qt::SizeAllCursor);
         return;
     }
     if (m_moving || m_tool == Tool::None) {
@@ -434,13 +465,16 @@ void CaptureOverlay::updateCursor() {
         setCursor(Qt::IBeamCursor);
         break;
     default:
-        setCursor(crosshairCursor());
+        // 矩形/椭圆/箭头/画笔：选工具后在选区内画图使用系统箭头
+        setCursor(Qt::ArrowCursor);
         break;
     }
 }
 
 void CaptureOverlay::setTool(Tool tool) {
     m_tool = tool;
+    if (tool == Tool::None)
+        m_hoverAnnIndex = -1;
     updateToolHighlights();
     updateCursor();
 }
@@ -506,7 +540,7 @@ void CaptureOverlay::placeTextEntry(const QPoint& pos) {
                            "  padding: 0;"
                            "  margin: 0;"
                            "  font-family: 'Microsoft YaHei UI';"
-                           "  font-size: 14px;"
+                           "  font-size: 22px;"
                            "  selection-background-color: rgba(255,77,79,80);"
                            "  selection-color: #ff4d4f;"
                            "}"));
@@ -516,7 +550,7 @@ void CaptureOverlay::placeTextEntry(const QPoint& pos) {
     m_textEntry->setText({});
     // 限制输入框不超出选区
     const int maxW = qMax(40, sel.right() - pos.x() - 2);
-    const int h = 20;
+    const int h = 30;
     m_textEntry->setFixedHeight(h);
     m_textEntry->setMinimumWidth(qMin(80, maxW));
     m_textEntry->resize(qMin(160, maxW), h);
@@ -544,15 +578,109 @@ void CaptureOverlay::commitTextEntry() {
     update();
 }
 
+QRect CaptureOverlay::annotationBounds(const Annotation& a) const {
+    switch (a.type) {
+    case Tool::Rect:
+    case Tool::Ellipse:
+        return QRect(a.p1, a.p2).normalized();
+    case Tool::Arrow: {
+        QPointF left;
+        QPointF right;
+        arrowHeadPoints(a.p1, a.p2, left, right);
+        QRectF r(QPointF(a.p1), QPointF(a.p2));
+        r = r.united(QRectF(left, right));
+        return r.normalized().toAlignedRect().adjusted(-2, -2, 2, 2);
+    }
+    case Tool::Text: {
+        const QFontMetrics fm(QFont(QStringLiteral("Microsoft YaHei UI"), kAnnTextSize));
+        return fm.boundingRect(a.text).translated(a.p1).adjusted(-2, -2, 2, 2);
+    }
+    case Tool::Pen: {
+        if (a.path.isEmpty())
+            return {};
+        QRect r(a.path.first(), a.path.first());
+        for (const QPoint& pt : a.path)
+            r = r.united(QRect(pt, pt));
+        return r.adjusted(-2, -2, 2, 2);
+    }
+    default:
+        return {};
+    }
+}
+
+int CaptureOverlay::hitTestAnnotation(const QPoint& pos) const {
+    // 边框命中容差：鼠标距图形边线 6px 内算命中（文字按文字区域算）
+    constexpr qreal kTol = 6.0;
+    const QPointF p = pos;
+    // 从最后画的（最上层）开始找
+    for (int i = m_annotations.size() - 1; i >= 0; --i) {
+        const Annotation& a = m_annotations.at(i);
+        switch (a.type) {
+        case Tool::Rect: {
+            const QRectF r = QRectF(QRect(a.p1, a.p2).normalized());
+            const qreal d = qMin(qMin(distToSegment(p, r.topLeft(), r.topRight()),
+                                      distToSegment(p, r.topRight(), r.bottomRight())),
+                                 qMin(distToSegment(p, r.bottomRight(), r.bottomLeft()),
+                                      distToSegment(p, r.bottomLeft(), r.topLeft())));
+            if (d <= kTol)
+                return i;
+            break;
+        }
+        case Tool::Ellipse: {
+            const QRectF r = QRectF(QRect(a.p1, a.p2).normalized());
+            const qreal rx = r.width() / 2.0;
+            const qreal ry = r.height() / 2.0;
+            if (rx < 1.0 || ry < 1.0)
+                break;
+            const QPointF c = r.center();
+            const qreal nx = (p.x() - c.x()) / rx;
+            const qreal ny = (p.y() - c.y()) / ry;
+            // 归一化半径与 1 的差换算成近似像素距离
+            const qreal dist = qAbs(qSqrt(nx * nx + ny * ny) - 1.0) * qMin(rx, ry);
+            if (dist <= kTol)
+                return i;
+            break;
+        }
+        case Tool::Arrow: {
+            QPointF left;
+            QPointF right;
+            arrowHeadPoints(a.p1, a.p2, left, right);
+            const qreal d = qMin(distToSegment(p, QPointF(a.p1), QPointF(a.p2)),
+                                 qMin(distToSegment(p, QPointF(a.p2), left),
+                                      distToSegment(p, QPointF(a.p2), right)));
+            if (d <= kTol)
+                return i;
+            break;
+        }
+        case Tool::Text:
+            if (annotationBounds(a).contains(pos))
+                return i;
+            break;
+        case Tool::Pen: {
+            // 自由线条：鼠标距任意一段路径 6px 内算命中
+            if (a.path.size() == 1) {
+                if (QLineF(p, QPointF(a.path.first())).length() <= kTol)
+                    return i;
+                break;
+            }
+            for (int j = 1; j < a.path.size(); ++j) {
+                if (distToSegment(p, QPointF(a.path.at(j - 1)), QPointF(a.path.at(j))) <= kTol)
+                    return i;
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    return -1;
+}
+
 void CaptureOverlay::drawArrow(QPainter& p, const QPoint& from, const QPoint& to) const {
     p.drawLine(from, to);
-    const qreal angle = qAtan2(qreal(to.y() - from.y()), qreal(to.x() - from.x()));
-    const qreal size = 12.0;
-    constexpr qreal kPi = 3.14159265358979323846;
-    const QPointF left(to.x() - size * qCos(angle - kPi / 6),
-                       to.y() - size * qSin(angle - kPi / 6));
-    const QPointF right(to.x() - size * qCos(angle + kPi / 6),
-                        to.y() - size * qSin(angle + kPi / 6));
+    QPointF left;
+    QPointF right;
+    arrowHeadPoints(from, to, left, right);
     QPainterPath head;
     head.moveTo(to);
     head.lineTo(left);
@@ -589,7 +717,7 @@ void CaptureOverlay::drawAnnotation(QPainter& p, const Annotation& a, const QPoi
         break;
     }
     case Tool::Text:
-        p.setFont(QFont(QStringLiteral("Microsoft YaHei UI"), 14));
+        p.setFont(QFont(QStringLiteral("Microsoft YaHei UI"), kAnnTextSize));
         p.drawText(map(a.p1), a.text);
         break;
     default:
@@ -812,6 +940,20 @@ void CaptureOverlay::mousePressEvent(QMouseEvent* event) {
             updateCursor();
             return;
         }
+        // 选了标注工具时，按在已画图形边框上优先拖动该图形（而不是新画一个），
+        // 并把该图形对应的工具激活（高亮），其它工具自动取消激活
+        if (m_tool != Tool::None) {
+            const int ann = hitTestAnnotation(event->pos());
+            if (ann >= 0) {
+                commitTextEntry();
+                m_movingAnnIndex = ann;
+                m_hoverAnnIndex = ann;
+                m_annDragLast = event->pos();
+                setTool(m_annotations.at(ann).type);
+                updateCursor();
+                return;
+            }
+        }
         // 未选标注工具：选区内拖拽移动整块选区（固定/自由模式均可）
         if (m_tool == Tool::None) {
             if (!selectionRect().contains(event->pos()))
@@ -839,6 +981,8 @@ void CaptureOverlay::mousePressEvent(QMouseEvent* event) {
         m_penPath.clear();
         if (m_tool == Tool::Pen)
             m_penPath.push_back(pos);
+        // 开始画线即切到系统箭头（与选工具后的要求一致）
+        updateCursor();
         update();
         return;
     }
@@ -877,20 +1021,41 @@ void CaptureOverlay::mouseMoveEvent(QMouseEvent* event) {
             update();
             return;
         }
+        if (m_movingAnnIndex >= 0) {
+            // 拖动已画图形：整体平移，夹在选区内不拖出界
+            Annotation& a = m_annotations[m_movingAnnIndex];
+            const QRect bounds = annotationBounds(a);
+            const QRect sel = selectionRect();
+            QPoint delta = event->pos() - m_annDragLast;
+            delta.setX(qBound(sel.left() - bounds.left(), delta.x(), sel.right() - bounds.right()));
+            delta.setY(qBound(sel.top() - bounds.top(), delta.y(), sel.bottom() - bounds.bottom()));
+            if (!delta.isNull()) {
+                a.p1 += delta;
+                a.p2 += delta;
+                for (QPoint& pt : a.path)
+                    pt += delta;
+                m_annDragLast += delta;
+            }
+            updateCursor();
+            update();
+            return;
+        }
         if (m_drawing) {
             m_drawCurrent = clampToSelection(event->pos());
             if (m_tool == Tool::Pen)
                 m_penPath.push_back(m_drawCurrent);
+            // 拖拽画线全程保持系统箭头
+            updateCursor();
             update();
             return;
         }
         const ResizeHandle hover = hitTestHandle(event->pos());
         const bool inSel = selectionRect().contains(event->pos());
-        if (hover != m_hoverHandle || inSel != m_pointerInSelection) {
-            m_hoverHandle = hover;
-            m_pointerInSelection = inSel;
-            updateCursor();
-        }
+        m_hoverHandle = hover;
+        m_hoverAnnIndex = (m_tool != Tool::None) ? hitTestAnnotation(event->pos()) : -1;
+        m_pointerInSelection = inSel;
+        // 每帧按当前工具/位置刷新，避免状态未变化时光标停留在旧样式
+        updateCursor();
         return;
     }
 
@@ -927,6 +1092,14 @@ void CaptureOverlay::mouseReleaseEvent(QMouseEvent* event) {
         offsetAnnotations(m_lockedSelection.topLeft() - prev.topLeft());
         m_moving = false;
         showToolbar();
+        updateCursor();
+        update();
+        return;
+    }
+
+    if (m_editing && m_movingAnnIndex >= 0) {
+        m_movingAnnIndex = -1;
+        m_hoverAnnIndex = (m_tool != Tool::None) ? hitTestAnnotation(event->pos()) : -1;
         updateCursor();
         update();
         return;

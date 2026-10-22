@@ -28,10 +28,11 @@ private:
                             quintptr hwndValue,
                             bool desktopMode,
                             const QPixmap& image);
-    QString saveTempImage(const QPixmap& image) const;
 
     void emitNotify(const QString& msg);
 
     /** 同一时刻只允许一个发送任务在跑，防止并发任务抢剪贴板/前台窗口/模拟输入。 */
     std::atomic_bool m_sending{false};
+    /** 本次发送是否因「已上传图片被用户删除」而中止（仅工作线程读写）：静默结束，不弹提示。 */
+    bool m_imageRemovedAbort = false;
 };
