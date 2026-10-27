@@ -23,7 +23,7 @@ Settings are stored at: `%LOCALAPPDATA%\Cheet\settings.json`
 
 - Windows 10/11
 - Visual Studio 2022 (MSVC)
-- Qt **6.5+** (Qt Quick / Quick Controls 2)
+- Qt **6.5+** (Qt Quick / Quick Controls 2 / Qt SVG)
 - CMake 3.21+
 - Ninja (optional)
 
@@ -48,6 +48,18 @@ Run:
 ```powershell
 .\build\Cheet.exe
 ```
+
+## Deploy (portable folder)
+
+`Cheet.exe` alone only runs on a machine with Qt installed. To run it elsewhere, collect the Qt runtime next to it with `windeployqt`:
+
+```powershell
+New-Item -ItemType Directory -Force dist | Out-Null
+Copy-Item .\build\Cheet.exe .\dist\
+& "$env:QTDIR\bin\windeployqt.exe" --qmldir qml --release --no-translations --no-opengl-sw .\dist\Cheet.exe
+```
+
+Copy the whole `dist` folder to the target machine. When run from a vcvars64 prompt, `windeployqt` also places `vc_redist.x64.exe` in `dist`; run it once on machines without the Visual C++ 2015–2022 runtime. To build an installer, point any installer tool (e.g. Inno Setup) at the `dist` folder.
 
 ## Project conventions
 

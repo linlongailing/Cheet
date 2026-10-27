@@ -23,7 +23,7 @@ Windows 托盘截图工具，基于 **C++ + Qt Quick (QML)**。支持框选标�
 
 - Windows 10/11
 - Visual Studio 2022（MSVC）
-- Qt **6.5+**（需含 Qt Quick / Quick Controls 2）
+- Qt **6.5+**（需含 Qt Quick / Quick Controls 2 / Qt SVG）
 - CMake 3.21+
 - Ninja（可选）
 
@@ -48,6 +48,18 @@ cmake --build build
 ```powershell
 .\build\Cheet.exe
 ```
+
+## 部署（可分发的绿色版）
+
+单独的 `Cheet.exe` 只能在装了 Qt 的电脑上运行。要拷到别的电脑使用，需要用 `windeployqt` 把 Qt 运行库收集到同一目录：
+
+```powershell
+New-Item -ItemType Directory -Force dist | Out-Null
+Copy-Item .\build\Cheet.exe .\dist\
+& "$env:QTDIR\bin\windeployqt.exe" --qmldir qml --release --no-translations --no-opengl-sw .\dist\Cheet.exe
+```
+
+把整个 `dist` 文件夹拷到目标电脑即可。在已执行 vcvars64 的终端里运行时，`windeployqt` 还会在 `dist` 里放一个 `vc_redist.x64.exe`，目标电脑若没装 Visual C++ 2015–2022 运行库，先运行它一次。如需安装包，用任意安装包工具（如 Inno Setup）打包 `dist` 文件夹即可。
 
 ## 工程约定
 
