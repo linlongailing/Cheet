@@ -86,6 +86,7 @@ void AiSender::sendAsync(const Settings& settings, const QPixmap& image) {
     }
 
     ClipboardImage::copyForPaste(image);
+    ClipboardImage::setGuardSuspended(true);
 
     const QPointer<AiSender> self(this);
     // 把截图带进工作线程：导航若误清剪贴板，发送前可恢复
@@ -96,6 +97,8 @@ void AiSender::sendAsync(const Settings& settings, const QPixmap& image) {
             ~SendingGuard() {
                 if (self)
                     self->m_sending.store(false, std::memory_order_release);
+                QMetaObject::invokeMethod(
+                    qApp, []() { ClipboardImage::setGuardSuspended(false); }, Qt::QueuedConnection);
             }
         };
         const SendingGuard guard{self};
@@ -107,7 +110,10 @@ void AiSender::sendAsync(const Settings& settings, const QPixmap& image) {
             return;
         // 无论成功/拦截/中断：结束时统一把截图以完整格式留在剪贴板
         // （PNG/DIB 能粘图、CF_HDROP 能在桌面/文件夹粘出文件）
-        if (!runOnGuiThread([image]() { ClipboardImage::copyForPaste(image); }))
+        if (!runOnGuiThread([image]() {
+                ClipboardImage::setGuardSuspended(false);
+                ClipboardImage::copyForPaste(image);
+            }))
             qWarning("AiSender: final clipboard restore failed");
         if (!self)
             return;

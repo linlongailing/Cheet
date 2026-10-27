@@ -82,7 +82,7 @@ private:
     QRect movedSelection(const QPoint& delta) const;
     void offsetAnnotations(const QPoint& delta);
     static Qt::CursorShape cursorForHandle(ResizeHandle handle);
-    static QIcon loadToolIcon(const QString& key);
+    static QIcon loadToolIcon(const QString& key, bool active);
 
     QPixmap m_screenshot;
     bool m_fixedMode = false;

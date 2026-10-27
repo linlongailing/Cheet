@@ -3,6 +3,7 @@
 #include <QBuffer>
 #include <QClipboard>
 #include <QDateTime>
+#include <QDebug>
 #include <QDir>
 #include <QGuiApplication>
 #include <QImage>
@@ -42,7 +43,113 @@ QString saveTempPng(const QImage& img) {
 
 #ifdef Q_OS_WIN
 
+/**
+ * 剪贴板守护：截图写入后，若剪贴板被其他程序清成「空」，自动把截图放回；
+ * 一旦剪贴板出现别的新内容（用户又复制了东西），立即停止守护、绝不覆盖。
+ * 所有调用都在 GUI 线程（WM_CLIPBOARDUPDATE 也由 GUI 线程消息循环派发）。
+ */
+struct ClipGuard {
+    HWND owner = nullptr; // 剪贴板所有者（隐藏消息窗口）+ 变化监听
+    QImage image;
+    QString path;
+    bool includeHdrop = false;
+    bool armed = false;
+    bool suspended = false; // AI 发送流程期间暂停，剪贴板完全交给发送流程
+    DWORD ourSeq = 0;       // 我们最后一次写入后的剪贴板序号，用于识别自己触发的通知
+    ULONGLONG lastRestoreAt = 0;
+    int burst = 0;
+};
+
+ClipGuard& clipGuard() {
+    static ClipGuard g;
+    return g;
+}
+
+// 补救间隔小于该值视为连续被清；连续多次说明有程序在反复清空，停止以免来回抢
+constexpr ULONGLONG kBurstWindowMs = 1000;
+constexpr int kMaxBurst = 5;
+
+bool writeClipboard(const QImage& img, const QString& filePath, bool includeHdrop);
+
+void disarmGuard() {
+    ClipGuard& g = clipGuard();
+    g.armed = false;
+    g.image = QImage();
+    g.path.clear();
+}
+
+void onClipboardUpdate() {
+    ClipGuard& g = clipGuard();
+    if (!g.armed || g.suspended)
+        return;
+    if (GetClipboardSequenceNumber() == g.ourSeq)
+        return; // 自己写入触发的通知
+    if (CountClipboardFormats() > 0) {
+        disarmGuard(); // 用户复制了别的新内容：尊重新内容，停止守护
+        return;
+    }
+    const ULONGLONG now = GetTickCount64();
+    g.burst = (g.lastRestoreAt && now - g.lastRestoreAt < kBurstWindowMs) ? g.burst + 1 : 0;
+    g.lastRestoreAt = now;
+    if (g.burst >= kMaxBurst) {
+        qWarning("ClipboardImage: clipboard keeps being emptied, stop guarding");
+        disarmGuard();
+        return;
+    }
+    qWarning("ClipboardImage: clipboard was emptied externally, restoring screenshot");
+    writeClipboard(g.image, g.path, g.includeHdrop);
+}
+
+LRESULT CALLBACK clipOwnerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_CLIPBOARDUPDATE) {
+        onClipboardUpdate();
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/** 惰性创建隐藏消息窗口：作为剪贴板所有者，并注册剪贴板变化监听 */
+HWND clipOwnerWindow() {
+    ClipGuard& g = clipGuard();
+    if (g.owner && IsWindow(g.owner))
+        return g.owner;
+    const HINSTANCE inst = GetModuleHandleW(nullptr);
+    WNDCLASSW wc{};
+    wc.lpfnWndProc = clipOwnerProc;
+    wc.hInstance = inst;
+    wc.lpszClassName = L"CheetClipboardOwner";
+    RegisterClassW(&wc); // 重复注册失败无妨
+    g.owner = CreateWindowExW(
+        0, wc.lpszClassName, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, inst, nullptr);
+    if (g.owner)
+        AddClipboardFormatListener(g.owner);
+    return g.owner;
+}
+
+/** 打开剪贴板：带所有者窗口；被其他程序占用时短暂重试 */
+bool openClipboardWithRetry(HWND owner) {
+    for (int i = 0; i < 10; ++i) {
+        if (OpenClipboard(owner))
+            return true;
+        Sleep(15);
+    }
+    return false;
+}
+
 bool setClipboardWin(const QImage& img, const QString& filePath, bool includeHdrop) {
+    if (!writeClipboard(img, filePath, includeHdrop))
+        return false;
+    ClipGuard& g = clipGuard();
+    g.image = img;
+    g.path = filePath;
+    g.includeHdrop = includeHdrop;
+    g.armed = true;
+    g.lastRestoreAt = 0;
+    g.burst = 0;
+    return true;
+}
+
+bool writeClipboard(const QImage& img, const QString& filePath, bool includeHdrop) {
     QImage rgb = img.convertToFormat(QImage::Format_RGB32);
     if (rgb.isNull())
         return false;
@@ -65,7 +172,9 @@ bool setClipboardWin(const QImage& img, const QString& filePath, bool includeHdr
             png.clear();
     }
 
-    if (!OpenClipboard(nullptr))
+    // 必须带所有者窗口打开：OpenClipboard(nullptr) 会让剪贴板变成无主数据
+    // （文档明确不支持），容易被其他程序/OLE 交接当成垃圾清掉
+    if (!openClipboardWithRetry(clipOwnerWindow()))
         return false;
     EmptyClipboard();
 
@@ -132,6 +241,7 @@ bool setClipboardWin(const QImage& img, const QString& filePath, bool includeHdr
     }
 
     CloseClipboard();
+    clipGuard().ourSeq = GetClipboardSequenceNumber();
     return ok;
 }
 
@@ -188,6 +298,14 @@ QString copyForWebPaste(const QPixmap& image) {
         mime->setData(QStringLiteral("image/png"), png);
     QGuiApplication::clipboard()->setMimeData(mime);
     return path;
+}
+
+void setGuardSuspended(bool suspended) {
+#ifdef Q_OS_WIN
+    clipGuard().suspended = suspended;
+#else
+    Q_UNUSED(suspended);
+#endif
 }
 
 } // namespace ClipboardImage

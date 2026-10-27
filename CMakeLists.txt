@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Network)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 Network Svg)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -68,14 +68,14 @@ qt_add_qml_module(cheetahClip
     RESOURCES
         resources/icons/icon.png
         resources/icons/icon.ico
-        resources/icons/tools/rect.png
-        resources/icons/tools/ellipse.png
-        resources/icons/tools/arrow.png
-        resources/icons/tools/pen.png
-        resources/icons/tools/text.png
-        resources/icons/tools/undo.png
-        resources/icons/tools/cancel.png
-        resources/icons/tools/ok.png
+        resources/icons/tools/rect.svg
+        resources/icons/tools/ellipse.svg
+        resources/icons/tools/arrow.svg
+        resources/icons/tools/pen.svg
+        resources/icons/tools/text.svg
+        resources/icons/tools/undo.svg
+        resources/icons/tools/cancel.svg
+        resources/icons/tools/ok.svg
         resources/icons/sites/chatgpt.png
         resources/icons/sites/gemini.png
         resources/icons/sites/claude.png
@@ -85,7 +85,7 @@ qt_add_qml_module(cheetahClip
         resources/icons/browsers/edge.png
         resources/icons/browsers/chrome.png
         resources/icons/browsers/firefox.png
-        resources/icons/crosshair.png
+        resources/icons/crosshair.svg
 )
 
 target_include_directories(cheetahClip PRIVATE src)
@@ -97,6 +97,7 @@ target_link_libraries(cheetahClip PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Network
+    Qt6::Svg
 )
 
 if(WIN32)

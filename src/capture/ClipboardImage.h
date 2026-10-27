@@ -19,4 +19,11 @@ QString copyForPaste(const QPixmap& image);
  */
 QString copyForWebPaste(const QPixmap& image);
 
+/**
+ * 暂停/恢复剪贴板守护（仅 GUI 线程调用）。
+ * 守护：截图写入后若剪贴板被清空则自动放回，直到用户复制别的内容为止。
+ * AI 发送流程要在剪贴板上来回贴图贴文，期间须暂停。
+ */
+void setGuardSuspended(bool suspended);
+
 } // namespace ClipboardImage

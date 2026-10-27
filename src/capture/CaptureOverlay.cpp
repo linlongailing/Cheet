@@ -4,6 +4,7 @@
 
 #include <QCursor>
 #include <QFontMetrics>
+#include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -14,6 +15,7 @@
 #include <QPainterPath>
 #include <QScreen>
 #include <QStyle>
+#include <QSvgRenderer>
 #include <QToolButton>
 #include <QtMath>
 
@@ -25,8 +27,31 @@ constexpr int kHandleHit = 8;
 constexpr int kHandleRadius = 4;
 constexpr int kMinSel = 8;
 
+constexpr int kToolIconSize = 22; // 工具栏图标逻辑尺寸（与 setIconSize 一致）
+constexpr int kCursorSize = 32;   // 准星光标逻辑尺寸
+constexpr QColor kActiveIconColor(0x4c, 0x9b, 0xff);
+
 QString iconPath(const QString& key) {
-    return QStringLiteral(":/qt/qml/CheetahClip/resources/icons/tools/%1.png").arg(key);
+    return QStringLiteral(":/qt/qml/CheetahClip/resources/icons/tools/%1.svg").arg(key);
+}
+
+/** 把 SVG 渲染成 px×px 物理像素位图；tint 有效时整体染成该颜色 */
+QPixmap renderSvg(const QString& path, int px, const QColor& tint = QColor()) {
+    QSvgRenderer renderer(path);
+    if (!renderer.isValid() || px <= 0)
+        return {};
+    QPixmap pm(px, px);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    renderer.render(&p);
+    if (tint.isValid()) {
+        p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        p.fillRect(pm.rect(), tint);
+    }
+    p.end();
+    return pm;
 }
 
 /** 点到线段的最短距离（标注边框命中判定用） */
@@ -48,13 +73,17 @@ void arrowHeadPoints(const QPoint& from, const QPoint& to, QPointF& left, QPoint
     right = QPointF(to.x() - size * qCos(angle + kPi / 6), to.y() - size * qSin(angle + kPi / 6));
 }
 
-/** 截图准星光标（用户提供的准星图，热点在正中心）；加载失败回退系统十字 */
+/** 截图准星光标（SVG 按主屏缩放比渲染，热点在正中心）；加载失败回退系统十字 */
 QCursor crosshairCursor() {
     static const QCursor cursor = []() {
-        const QPixmap pm(QStringLiteral(":/qt/qml/CheetahClip/resources/icons/crosshair.png"));
+        const QScreen* screen = QGuiApplication::primaryScreen();
+        const qreal dpr = screen ? screen->devicePixelRatio() : 1.0;
+        QPixmap pm = renderSvg(QStringLiteral(":/qt/qml/CheetahClip/resources/icons/crosshair.svg"),
+                               qRound(kCursorSize * dpr));
         if (pm.isNull())
             return QCursor(Qt::CrossCursor);
-        return QCursor(pm, pm.width() / 2, pm.height() / 2);
+        pm.setDevicePixelRatio(dpr);
+        return QCursor(pm); // 热点默认取中心
     }();
     return cursor;
 }
@@ -82,54 +111,44 @@ CaptureOverlay::CaptureOverlay(const QPixmap& screenshot,
     m_toolbar->setObjectName(QStringLiteral("captureToolbar"));
     m_toolbar->setStyleSheet(
         QStringLiteral("QWidget#captureToolbar {"
-                       "  background: rgba(26,27,30,235);"
-                       "  border: 1px solid #3a3d45;"
-                       "  border-radius: 8px;"
+                       "  background: rgba(38,41,51,240);"
+                       "  border-radius: 6px;"
                        "}"
                        "QToolButton {"
-                       "  background: #4a4e58;"
-                       "  border: 1px solid #5a5e68;"
-                       "  border-radius: 6px;"
-                       "  padding: 2px;"
-                       "  min-width: 26px;"
-                       "  max-width: 26px;"
-                       "  min-height: 26px;"
-                       "  max-height: 26px;"
-                       "  color: #ffffff;"
+                       "  background: transparent;"
+                       "  border: none;"
+                       "  border-radius: 4px;"
+                       "  padding: 0px;"
+                       "  min-width: 34px;"
+                       "  max-width: 34px;"
+                       "  min-height: 34px;"
+                       "  max-height: 34px;"
+                       "  color: #e8e8ea;"
+                       "  font-size: 16px;"
                        "}"
-                       "QToolButton:hover { background: #5a5e68; border-color: #6a6e78; }"
-                       "QToolButton[active=\"true\"] {"
-                       "  background: #2d6cdf;"
-                       "  border-color: #3b7af0;"
-                       "}"
+                       "QToolButton:hover { background: rgba(255,255,255,28); }"
+                       "QToolButton[active=\"true\"] { background: rgba(59,130,246,60); }"
                        "QToolButton#aiBtn {"
-                       "  background: #2d6cdf;"
-                       "  border-color: #2d6cdf;"
-                       "  padding: 2px 8px;"
-                       "  min-width: 56px;"
-                       "  max-width: 72px;"
-                       "  min-height: 26px;"
-                       "  max-height: 26px;"
-                       "  color: #ffffff;"
-                       "  font-size: 11px;"
+                       "  padding: 0px 6px;"
+                       "  min-width: 0px;"
+                       "  max-width: 120px;"
+                       "  color: #4c9bff;"
+                       "  font-size: 13px;"
                        "}"
-                       "QToolButton#aiBtn:hover { background: #3b7af0; }"
-                       "QToolButton#cancelBtn {"
-                       "  background: #e5484d;"
-                       "  border-color: #e5484d;"
-                       "  color: #ffffff;"
-                       "}"
-                       "QToolButton#cancelBtn:hover { background: #f2555a; border-color: #f2555a; }"
-                       "QToolButton#okBtn {"
-                       "  background: #30a46c;"
-                       "  border-color: #30a46c;"
-                       "  color: #ffffff;"
-                       "}"
-                       "QToolButton#okBtn:hover { background: #3cb179; border-color: #3cb179; }"));
+                       "QFrame#toolbarSep { background: #4a4e5a; border: none; }"));
 
     auto* lay = new QHBoxLayout(m_toolbar);
-    lay->setContentsMargins(6, 4, 6, 4);
-    lay->setSpacing(4);
+    lay->setContentsMargins(10, 5, 10, 5);
+    lay->setSpacing(6);
+
+    auto addSeparator = [this, lay]() {
+        auto* sep = new QFrame(m_toolbar);
+        sep->setObjectName(QStringLiteral("toolbarSep"));
+        sep->setFixedSize(1, 22);
+        lay->addSpacing(4);
+        lay->addWidget(sep);
+        lay->addSpacing(4);
+    };
 
     auto& i18n = I18n::instance();
     const QStringList keys = {QStringLiteral("rect"),
@@ -138,11 +157,13 @@ CaptureOverlay::CaptureOverlay(const QPixmap& screenshot,
                               QStringLiteral("pen"),
                               QStringLiteral("text"),
                               QStringLiteral("undo"),
+                              QStringLiteral("ai"),
                               QStringLiteral("cancel"),
-                              QStringLiteral("ok"),
-                              QStringLiteral("ai")};
+                              QStringLiteral("ok")};
 
     for (const QString& key : keys) {
+        if (key == QLatin1String("ai") || key == QLatin1String("cancel"))
+            addSeparator();
         auto* btn = new QToolButton(m_toolbar);
         btn->setAutoRaise(false);
         btn->setCursor(Qt::PointingHandCursor);
@@ -154,12 +175,8 @@ CaptureOverlay::CaptureOverlay(const QPixmap& screenshot,
             btn->setText(i18n.tr(QStringLiteral("tool_ai")));
             btn->setToolButtonStyle(Qt::ToolButtonTextOnly);
         } else {
-            if (key == QLatin1String("ok"))
-                btn->setObjectName(QStringLiteral("okBtn"));
-            else if (key == QLatin1String("cancel"))
-                btn->setObjectName(QStringLiteral("cancelBtn"));
-            btn->setIcon(loadToolIcon(key));
-            btn->setIconSize(QSize(16, 16));
+            btn->setIcon(loadToolIcon(key, false));
+            btn->setIconSize(QSize(kToolIconSize, kToolIconSize));
             if (btn->icon().isNull()) {
                 static const QHash<QString, QString> fallback = {
                     {QStringLiteral("rect"), QStringLiteral("□")},
@@ -201,11 +218,17 @@ CaptureOverlay::CaptureOverlay(const QPixmap& screenshot,
     }
 }
 
-QIcon CaptureOverlay::loadToolIcon(const QString& key) {
-    const QPixmap pm(iconPath(key));
-    if (pm.isNull())
-        return {};
-    return QIcon(pm);
+QIcon CaptureOverlay::loadToolIcon(const QString& key, bool active) {
+    // 按常见缩放比各渲染一份，QIcon 会挑最接近的，任何缩放下都清晰
+    const QColor tint = active ? kActiveIconColor : QColor();
+    QIcon icon;
+    for (const qreal scale : {1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0}) {
+        const QPixmap pm = renderSvg(iconPath(key), qRound(kToolIconSize * scale), tint);
+        if (pm.isNull())
+            return {};
+        icon.addPixmap(pm);
+    }
+    return icon;
 }
 
 QRect CaptureOverlay::selectionRect() const {
@@ -262,6 +285,7 @@ void CaptureOverlay::updateToolHighlights() {
             key == QLatin1String("ok") || key == QLatin1String("ai"))
             continue;
         it.value()->setProperty("active", key == active);
+        it.value()->setIcon(loadToolIcon(key, key == active));
         it.value()->style()->unpolish(it.value());
         it.value()->style()->polish(it.value());
     }
